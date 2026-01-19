@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="../../actions/workflows/release.yml"><img src="https://github.com/user/link-tune/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/v/release/user/link-tune" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/user/link-tune" alt="License"></a>
+</p>
+
+<p align="center">
   <a href="#功能特性">功能特性</a> •
   <a href="#支持的协议">支持的协议</a> •
   <a href="#安装">安装</a> •
@@ -41,11 +47,6 @@ LinkTune 是一款多协议音乐播放器，支持连接多种自建音乐服�
 | Jellyfin | 🚧 计划中 | - |
 | Plex | 🚧 计划中 | - |
 
-## 截图
-
-<p align="center">
-  <em>（可在此处添加应用截图）</em>
-</p>
 
 ## 安装
 
@@ -109,7 +110,17 @@ npm run dist
 npm run pack
 ```
 
-构建产物位于 `dist/` 目录。
+构建产物位于 `release/` 目录。
+
+### 自动构建与发布
+
+项目配置了 GitHub Actions，当推送到 `main` 分支时会自动构建各平台安装包。创建版本标签（如 `v0.1.0`）时会自动发布到 Releases：
+
+```bash
+# 创建并推送版本标签
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ### 移动端 (Capacitor)
 

@@ -57,7 +57,8 @@
     "appId": "com.linktune.app",
     "productName": "LinkTune",
     "directories": {
-      "buildResources": "build"
+      "buildResources": "build",
+      "output": "release"
     },
     "files": [
       "dist/**",
