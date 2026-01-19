@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="../../actions/workflows/release.yml"><img src="https://github.com/user/link-tune/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
-  <a href="../../releases"><img src="https://img.shields.io/github/v/release/user/link-tune" alt="Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/user/link-tune" alt="License"></a>
+  <a href="../../actions/workflows/release.yml"><img src="https://github.com/Leeero/LinkTune/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/v/release/Leeero/LinkTune" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Leeero/LinkTune" alt="License"></a>
 </p>
 
 <p align="center">
