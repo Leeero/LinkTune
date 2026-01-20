@@ -190,6 +190,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // playAtIndex 引用，供超时回调使用
   const playAtIndexRef = useRef<((idx: number) => Promise<void>) | null>(null);
 
+  // 连续播放失败计数器
+  const consecutiveErrorCountRef = useRef<number>(0);
+  const MAX_CONSECUTIVE_ERRORS = 5;
+
   /** 清除加载相关的定时器 */
   const clearLoadTimers = useCallback(() => {
     if (loadTimeoutRef.current) {
@@ -204,6 +208,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   /** 加载失败时自动跳到下一首 */
   const skipToNextOnError = useCallback(() => {
+    // 增加连续失败计数
+    consecutiveErrorCountRef.current += 1;
+
+    // 如果连续失败次数达到上限，停止播放
+    if (consecutiveErrorCountRef.current >= MAX_CONSECUTIVE_ERRORS) {
+      console.warn(`[Player] 连续 ${MAX_CONSECUTIVE_ERRORS} 首歌曲播放失败，停止播放`);
+      setStatus('error');
+      setErrorMessage(`连续 ${MAX_CONSECUTIVE_ERRORS} 首播放失败，已停止`);
+      setIsPlaying(false);
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+      }
+      return;
+    }
+
     const list = fullTracksRef.current;
     const idx = globalIndexRef.current;
     const mode = playbackModeRef.current;
@@ -421,6 +441,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const onCanPlay = () => {
       setStatus('ready');
       setErrorMessage(null);
+      // 播放成功，重置连续失败计数器
+      consecutiveErrorCountRef.current = 0;
       // 加载成功，清除超时定时器
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
