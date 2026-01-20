@@ -72,14 +72,14 @@ function createMainWindow() {
 
 function createTray() {
   // 使用应用图标
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+  const iconPath = path.join(__dirname, '..', 'build', 'icon-rounded.png');
   let icon = nativeImage.createFromPath(iconPath);
   
   // macOS 托盘图标需要较小尺寸
   if (process.platform === 'darwin') {
-    icon = icon.resize({ width: 18, height: 18, borderRadius: 9});
+    icon = icon.resize({ width: 18, height: 18});
   } else {
-    icon = icon.resize({ width: 24, height: 24, borderRadius: 12});
+    icon = icon.resize({ width: 24, height: 24});
   }
 
   tray = new Tray(icon);
