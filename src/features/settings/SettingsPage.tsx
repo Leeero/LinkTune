@@ -77,7 +77,7 @@ export function SettingsPage() {
 
     try {
       const host = new URL(c.baseUrl).host;
-      const serverName = c.serverName ? ` · ${c.serverName}` : '';
+      const serverName = 'serverName' in c && c.serverName ? ` · ${c.serverName}` : '';
       return `${c.protocol.toUpperCase()} · ${host}${serverName}`;
     } catch {
       return c.protocol.toUpperCase();

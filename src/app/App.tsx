@@ -21,6 +21,13 @@ import { useThemeMode } from '../theme/ThemeProvider';
 
 const { Sider, Content } = Layout;
 
+// 自定义协议固定歌单
+const CUSTOM_PLAYLISTS = [
+  { id: 'netease', name: '网易云音乐' },
+  { id: 'kuwo', name: '酷我音乐' },
+  { id: 'qq', name: 'QQ音乐' },
+] as const;
+
 function Shell() {
   const location = useLocation();
   const { token } = theme.useToken();
@@ -29,6 +36,7 @@ function Shell() {
 
   const isDark = mode === 'dark';
   const isEmby = auth.credentials?.protocol === 'emby';
+  const isCustom = auth.credentials?.protocol === 'custom';
 
   const [playlists, setPlaylists] = useState<EmbyPlaylist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
@@ -64,7 +72,19 @@ function Shell() {
     return () => controller.abort();
   }, [auth.credentials]);
 
-  const [openKeys, setOpenKeys] = useState<string[]>(() => (location.pathname.startsWith('/playlists/') ? ['/playlists'] : []));
+  // custom 协议默认展开歌单菜单
+  const [openKeys, setOpenKeys] = useState<string[]>(() => {
+    if (location.pathname.startsWith('/playlists/')) return ['/playlists'];
+    return [];
+  });
+
+  // custom 协议：始终展开歌单菜单
+  useEffect(() => {
+    if (isCustom) {
+      setOpenKeys((prev) => (prev.includes('/playlists') ? prev : [...prev, '/playlists']));
+    }
+  }, [isCustom]);
+
   useEffect(() => {
     if (location.pathname.startsWith('/playlists/')) {
       setOpenKeys((prev) => (prev.includes('/playlists') ? prev : [...prev, '/playlists']));
@@ -72,6 +92,36 @@ function Shell() {
   }, [location.pathname]);
 
   const menuItems = useMemo(() => {
+    // 自定义协议：固定歌单列表
+    if (isCustom) {
+      const customPlaylistChildren = CUSTOM_PLAYLISTS.map((p) => {
+        const to = `/playlists/${p.id}`;
+        return {
+          key: to,
+          label: (
+            <Link to={to} state={{ playlistName: p.name, source: p.id }}>
+              {p.name}
+            </Link>
+          ),
+        };
+      });
+
+      return [
+        {
+          key: '/playlists',
+          icon: <UnorderedListOutlined />,
+          label: '歌单',
+          children: customPlaylistChildren,
+        },
+        {
+          key: '/settings',
+          icon: <SettingOutlined />,
+          label: <Link to="/settings">设置</Link>,
+        },
+      ];
+    }
+
+    // Emby / Navidrome 协议
     const playlistChildren = (() => {
       if (!isEmby) return [{ key: '/playlists/__disabled', disabled: true, label: '仅支持 Emby' }];
       if (playlistsLoading) return [{ key: '/playlists/__loading', disabled: true, label: '歌单加载中…' }];
@@ -123,7 +173,7 @@ function Shell() {
         label: <Link to="/settings">设置</Link>,
       },
     ];
-  }, [isEmby, playlists, playlistsError, playlistsLoading]);
+  }, [isCustom, isEmby, playlists, playlistsError, playlistsLoading]);
 
 
   return (
@@ -180,8 +230,8 @@ function Shell() {
                 <>
                   <div style={{ padding: '0 20px 20px 20px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     <Routes>
-                      <Route path="/" element={<LibraryPage />} />
-                      <Route path="/library" element={<LibraryPage />} />
+                      <Route path="/" element={isCustom ? <Navigate to="/playlists/netease" replace /> : <LibraryPage />} />
+                      <Route path="/library" element={isCustom ? <Navigate to="/playlists/netease" replace /> : <LibraryPage />} />
                       <Route path="/playlists/:playlistId" element={<LibraryPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                     </Routes>

@@ -1,1 +1,1 @@
-export type ProtocolId = 'emby' | 'navidrome';
+export type ProtocolId = 'emby' | 'navidrome' | 'custom';

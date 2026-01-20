@@ -1,7 +1,8 @@
+import type { CustomCredentials } from '../protocols/custom/types';
 import type { EmbyCredentials } from '../protocols/emby/types';
 import type { NavidromeCredentials } from '../protocols/navidrome/types';
 
-export type AuthCredentials = EmbyCredentials | NavidromeCredentials;
+export type AuthCredentials = EmbyCredentials | NavidromeCredentials | CustomCredentials;
 
 export type AuthState = {
   isAuthenticated: boolean;

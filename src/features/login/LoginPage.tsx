@@ -36,11 +36,15 @@ type LoginFormValues = {
 };
 
 function protocolLabel(p: ProtocolId) {
-  return p === 'emby' ? 'Emby' : 'Navidrome';
+  if (p === 'emby') return 'Emby';
+  if (p === 'navidrome') return 'Navidrome';
+  return '自定义';
 }
 
 function protocolTagline(p: ProtocolId) {
-  return p === 'emby' ? '家庭媒体中心 / NAS 常用' : 'Subsonic API · 轻量自建';
+  if (p === 'emby') return '家庭媒体中心 / NAS 常用';
+  if (p === 'navidrome') return 'Subsonic API · 轻量自建';
+  return '仅需填写服务地址';
 }
 
 export function LoginPage() {
@@ -55,7 +59,9 @@ export function LoginPage() {
   const [form] = Form.useForm<LoginFormValues>();
 
   const placeholderBaseUrl = useMemo(() => {
-    return protocol === 'emby' ? '例如 http://192.168.1.2:8096' : '例如 http://192.168.1.10:4533';
+    if (protocol === 'emby') return '例如 http://192.168.1.2:8096';
+    if (protocol === 'navidrome') return '例如 http://192.168.1.10:4533';
+    return '例如 http://192.168.1.100:8080';
   }, [protocol]);
 
   const help = useMemo(() => {
@@ -67,9 +73,21 @@ export function LoginPage() {
       );
     }
 
+    if (protocol === 'navidrome') {
+      return (
+        <Typography.Text style={{ color: token.colorTextSecondary }}>
+          将通过 <b>Subsonic API</b> 校验登录（使用 <code>/rest/ping.view</code>）。
+        </Typography.Text>
+      );
+    }
+
     return (
       <Typography.Text style={{ color: token.colorTextSecondary }}>
-        将通过 <b>Subsonic API</b> 校验登录（使用 <code>/rest/ping.view</code>）。
+        直接使用服务地址，<b>无需账号密码</b>。可前往{' '}
+        <Typography.Link href="https://tunefree.fun/" target="_blank" rel="noopener noreferrer">
+          tunefree.fun
+        </Typography.Link>{' '}
+        获取可用服务地址。
       </Typography.Text>
     );
   }, [protocol, token.colorTextSecondary]);
@@ -89,9 +107,27 @@ export function LoginPage() {
         return;
       }
 
-      const cred = await navidromeLoginSubsonic(values);
-      auth.login(cred);
-      message.success(`已登录 ${protocolLabel(protocol)}`);
+      if (protocol === 'navidrome') {
+        const cred = await navidromeLoginSubsonic(values);
+        auth.login(cred);
+        message.success(`已登录 ${protocolLabel(protocol)}`);
+        navigate('/library');
+        return;
+      }
+
+      // 自定义协议：只需要 baseUrl
+      let baseUrl = String(values.baseUrl).trim();
+      if (!/^https?:\/\//i.test(baseUrl)) {
+        baseUrl = `http://${baseUrl}`;
+      }
+      // 移除尾部斜杠
+      baseUrl = baseUrl.replace(/\/+$/, '');
+
+      auth.login({
+        protocol: 'custom',
+        baseUrl,
+      });
+      message.success('已连接自定义服务');
       navigate('/library');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '登录失败';
@@ -200,7 +236,7 @@ export function LoginPage() {
                     onChange={(v) => {
                       setProtocol(v);
                       setError(null);
-                      // 切协议只清空“可能不兼容”的字段，保留输入体验
+                      // 切协议只清空"可能不兼容"的字段，保留输入体验
                       form.setFieldsValue({ password: '' });
                     }}
                     options={[
@@ -219,6 +255,15 @@ export function LoginPage() {
                           <div style={{ padding: '6px 2px', textAlign: 'left' }}>
                             <div style={{ fontWeight: 600 }}>Navidrome</div>
                             <div style={{ fontSize: 12, color: token.colorTextTertiary }}>{protocolTagline('navidrome')}</div>
+                          </div>
+                        ),
+                      },
+                      {
+                        value: 'custom',
+                        label: (
+                          <div style={{ padding: '6px 2px', textAlign: 'left' }}>
+                            <div style={{ fontWeight: 600 }}>自定义</div>
+                            <div style={{ fontSize: 12, color: token.colorTextTertiary }}>{protocolTagline('custom')}</div>
                           </div>
                         ),
                       },
@@ -263,27 +308,29 @@ export function LoginPage() {
                     />
                   </Form.Item>
 
-                  <Row gutter={12}>
-                    <Col xs={24} sm={12}>
-                      <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-                        <Input prefix={<UserOutlined />} autoCapitalize="none" autoCorrect="off" />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={12}>
-                      <Form.Item
-                        label="密码"
-                        name="password"
-                        rules={[{ required: true, message: '请输入密码' }]}
-                        extra={
-                          protocol === 'navidrome' ? (
-                            <span style={{ color: token.colorTextTertiary }}>不会存储明文密码；仅用于计算 Subsonic token。</span>
-                          ) : undefined
-                        }
-                      >
-                        <Input.Password prefix={<LockOutlined />} />
+                  {protocol !== 'custom' && (
+                    <Row gutter={12}>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}>
+                          <Input prefix={<UserOutlined />} autoCapitalize="none" autoCorrect="off" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item
+                          label="密码"
+                          name="password"
+                          rules={[{ required: true, message: '请输入密码' }]}
+                          extra={
+                            protocol === 'navidrome' ? (
+                              <span style={{ color: token.colorTextTertiary }}>不会存储明文密码；仅用于计算 Subsonic token。</span>
+                            ) : undefined
+                          }
+                        >
+                          <Input.Password prefix={<LockOutlined />} />
                       </Form.Item>
                     </Col>
                   </Row>
+                  )}
 
                   <Space style={{ marginTop: 6 }}>
                     <Button type="primary" icon={<LoginOutlined />} loading={loading} htmlType="submit">

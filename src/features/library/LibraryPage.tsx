@@ -9,8 +9,17 @@ import { useAuth } from '../../session/AuthProvider';
 import { embyGetPlaylistSongsPage, embyGetSongsPage } from '../../protocols/emby/library';
 import { buildEmbyAudioUniversalUrl } from '../../protocols/emby/media';
 import type { EmbySong } from '../../protocols/emby/types';
+import {
+  buildCustomAudioUrl,
+  customGetPlaylistSongsPage,
+  type CustomPlaylistSource,
+  type CustomSong,
+} from '../../protocols/custom/library';
 import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
+
+// 统一歌曲类型
+type UnifiedSong = EmbySong | CustomSong;
 
 function formatDurationFromTicks(ticks?: number) {
   if (!ticks || !Number.isFinite(ticks) || ticks <= 0) return '--:--';
@@ -18,6 +27,15 @@ function formatDurationFromTicks(ticks?: number) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatDurationFromSeconds(seconds?: number) {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--:--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
@@ -114,6 +132,14 @@ export function LibraryPage() {
   const playlistId = typeof rawPlaylistId === 'string' ? rawPlaylistId : '';
   const isPlaylistMode = Boolean(playlistId);
 
+  // 获取歌单来源（用于自定义协议）
+  const customSource = (() => {
+    const s = location.state as unknown;
+    if (!s || typeof s !== 'object') return playlistId as CustomPlaylistSource;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return String((s as any).source ?? playlistId) as CustomPlaylistSource;
+  })();
+
   const playlistName = (() => {
     const s = location.state as unknown;
     if (!s || typeof s !== 'object') return '';
@@ -127,7 +153,7 @@ export function LibraryPage() {
 
   const [playAllLoading, setPlayAllLoading] = useState(false);
 
-  const [songs, setSongs] = useState<EmbySong[]>([]);
+  const [songs, setSongs] = useState<UnifiedSong[]>([]);
   const [total, setTotal] = useState(0);
   const [loadingFirstPage, setLoadingFirstPage] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -146,7 +172,7 @@ export function LibraryPage() {
   const restoreTimeoutHandleRef = useRef<number | null>(null);
 
   // 用 ref 避免 load 函数依赖 songs/hasMore/loading 造成闭包变化，从而触发重复请求
-  const songsRef = useRef<EmbySong[]>([]);
+  const songsRef = useRef<UnifiedSong[]>([]);
   const totalRef = useRef(0);
   const hasMoreRef = useRef(true);
   const loadingFirstRef = useRef(false);
@@ -174,13 +200,17 @@ export function LibraryPage() {
     if (!c) return '';
     try {
       const host = new URL(c.baseUrl).host;
-      return `${c.protocol.toUpperCase()} · ${host}${c.serverName ? ` · ${c.serverName}` : ''}`;
+      if (c.protocol === 'custom') {
+        return `自定义 · ${host}`;
+      }
+      return `${c.protocol.toUpperCase()} · ${host}${'serverName' in c && c.serverName ? ` · ${c.serverName}` : ''}`;
     } catch {
       return c.protocol.toUpperCase();
     }
   }, [auth.credentials]);
 
   const isEmby = auth.credentials?.protocol === 'emby';
+  const isCustom = auth.credentials?.protocol === 'custom';
 
   const pageTitle = isPlaylistMode ? (playlistName ? `歌单 · ${playlistName}` : '歌单') : '歌曲';
 
@@ -226,7 +256,10 @@ export function LibraryPage() {
   const loadSongsChunk = useCallback(
     async (params: { reset: boolean }) => {
       const c = auth.credentials;
-      if (!c || c.protocol !== 'emby') return;
+      if (!c) return;
+
+      // 仅支持 emby 和 custom 协议
+      if (c.protocol !== 'emby' && c.protocol !== 'custom') return;
 
       // reset 时取消进行中的请求，并重置自动补齐计数
       if (params.reset) {
@@ -257,66 +290,91 @@ export function LibraryPage() {
         setLoadingMore(true);
       }
 
-      const modeKey = isPlaylistMode ? `playlist:${playlistId}` : 'library';
-      const key = `${modeKey}|${c.baseUrl}|${c.method}|${'userId' in c ? c.userId ?? '' : ''}|${startIndex}|${batchSize}|${searchTerm}`;
-
-      // 短缓存：避免滚动抖动/回弹导致的重复请求
-      const cached = cacheRef.current.get(key);
-      const now = Date.now();
-      if (cached && now - cached.at < 30_000) {
-        setSongs((prev) => {
-          const next = params.reset ? cached.items : [...prev, ...cached.items];
-          const seen = new Set<string>();
-          return next.filter((x) => {
-            if (seen.has(x.id)) return false;
-            seen.add(x.id);
-            return true;
-          });
-        });
-        setTotal(cached.total);
-        setHasMore(startIndex + cached.items.length < cached.total);
-        setLoadingFirstPage(false);
-        setLoadingMore(false);
-        return;
-      }
-
       try {
-        const res = isPlaylistMode
-          ? await embyGetPlaylistSongsPage({
-              credentials: c,
-              playlistId,
-              startIndex,
-              limit: batchSize,
-              searchTerm: searchTerm || undefined,
-              signal: controller.signal,
-            })
-          : await embyGetSongsPage({
-              credentials: c,
-              startIndex,
-              limit: batchSize,
-              searchTerm: searchTerm || undefined,
-              signal: controller.signal,
-            });
-
-        const value: CacheValue = { at: Date.now(), items: res.items, total: res.total };
-        cacheRef.current.set(key, value);
-        if (cacheRef.current.size > 60) {
-          const firstKey = cacheRef.current.keys().next().value as string | undefined;
-          if (firstKey) cacheRef.current.delete(firstKey);
-        }
-
-        setTotal(res.total);
-        setSongs((prev) => {
-          const next = params.reset ? res.items : [...prev, ...res.items];
-          const seen = new Set<string>();
-          return next.filter((x) => {
-            if (seen.has(x.id)) return false;
-            seen.add(x.id);
-            return true;
+        if (c.protocol === 'custom') {
+          // 自定义协议：调用 customGetPlaylistSongsPage
+          const res = await customGetPlaylistSongsPage({
+            credentials: c,
+            source: customSource,
+            startIndex,
+            limit: batchSize,
+            signal: controller.signal,
           });
-        });
 
-        setHasMore(startIndex + res.items.length < res.total);
+          setTotal(res.total);
+          setSongs((prev) => {
+            const next = params.reset ? res.items : [...prev, ...res.items];
+            const seen = new Set<string>();
+            return next.filter((x) => {
+              if (seen.has(x.id)) return false;
+              seen.add(x.id);
+              return true;
+            });
+          });
+
+          setHasMore(startIndex + res.items.length < res.total);
+        } else {
+          // Emby 协议
+          const modeKey = isPlaylistMode ? `playlist:${playlistId}` : 'library';
+          const key = `${modeKey}|${c.baseUrl}|${c.method}|${'userId' in c ? c.userId ?? '' : ''}|${startIndex}|${batchSize}|${searchTerm}`;
+
+          // 短缓存：避免滚动抖动/回弹导致的重复请求
+          const cached = cacheRef.current.get(key);
+          const now = Date.now();
+          if (cached && now - cached.at < 30_000) {
+            setSongs((prev) => {
+              const next = params.reset ? cached.items : [...prev, ...cached.items];
+              const seen = new Set<string>();
+              return next.filter((x) => {
+                if (seen.has(x.id)) return false;
+                seen.add(x.id);
+                return true;
+              });
+            });
+            setTotal(cached.total);
+            setHasMore(startIndex + cached.items.length < cached.total);
+            setLoadingFirstPage(false);
+            setLoadingMore(false);
+            return;
+          }
+
+          const res = isPlaylistMode
+            ? await embyGetPlaylistSongsPage({
+                credentials: c,
+                playlistId,
+                startIndex,
+                limit: batchSize,
+                searchTerm: searchTerm || undefined,
+                signal: controller.signal,
+              })
+            : await embyGetSongsPage({
+                credentials: c,
+                startIndex,
+                limit: batchSize,
+                searchTerm: searchTerm || undefined,
+                signal: controller.signal,
+              });
+
+          const value: CacheValue = { at: Date.now(), items: res.items, total: res.total };
+          cacheRef.current.set(key, value);
+          if (cacheRef.current.size > 60) {
+            const firstKey = cacheRef.current.keys().next().value as string | undefined;
+            if (firstKey) cacheRef.current.delete(firstKey);
+          }
+
+          setTotal(res.total);
+          setSongs((prev) => {
+            const next = params.reset ? res.items : [...prev, ...res.items];
+            const seen = new Set<string>();
+            return next.filter((x) => {
+              if (seen.has(x.id)) return false;
+              seen.add(x.id);
+              return true;
+            });
+          });
+
+          setHasMore(startIndex + res.items.length < res.total);
+        }
       } catch (e) {
         if (e instanceof Error && /取消/.test(e.message)) return;
         setError(e instanceof Error ? e.message : '拉取歌曲失败');
@@ -328,14 +386,30 @@ export function LibraryPage() {
         }
       }
     },
-    [auth.credentials, batchSize, isPlaylistMode, playlistId, searchTerm],
+    [auth.credentials, batchSize, customSource, isPlaylistMode, playlistId, searchTerm],
   );
 
   // 当登录态/搜索条件变化：优先从本地恢复，避免每次切页都重新拉取
   useEffect(() => {
     if (!auth.credentials) return;
 
-    if (auth.credentials.protocol !== 'emby') {
+    const protocol = auth.credentials.protocol;
+
+    // 自定义协议：直接加载
+    if (protocol === 'custom') {
+      const autoLoadKey = `custom:${customSource}|${auth.credentials.baseUrl}`;
+      const isSameAutoLoadKey = autoLoadKey === prevAutoLoadKeyRef.current;
+      if (isSameAutoLoadKey) {
+        const hasAnyData = songsRef.current.length > 0 || totalRef.current > 0;
+        if (hasAnyData || loadingFirstRef.current || loadingMoreRef.current) return;
+      }
+      prevAutoLoadKeyRef.current = autoLoadKey;
+      void loadSongsChunk({ reset: true });
+      return;
+    }
+
+    // 非 emby 协议（如 navidrome）暂不支持
+    if (protocol !== 'emby') {
       setSongs([]);
       setTotal(0);
       setHasMore(false);
@@ -435,7 +509,7 @@ export function LibraryPage() {
         restoreTimeoutHandleRef.current = null;
       }
     };
-  }, [auth.credentials, isPlaylistMode, loadSongsChunk, playlistId, searchTerm, songsPersistKey]);
+  }, [auth.credentials, customSource, isPlaylistMode, loadSongsChunk, playlistId, searchTerm, songsPersistKey]);
 
   // 将已加载列表持久化到本地：回到本页时直接复用，不重复请求
   useEffect(() => {
@@ -471,7 +545,7 @@ export function LibraryPage() {
     if (!body) return;
 
     const onScroll = () => {
-      if (!isEmby) return;
+      if (!isEmby && !isCustom) return;
       if (loadingFirstPage || loadingMore) return;
       if (!hasMore) return;
 
@@ -484,11 +558,11 @@ export function LibraryPage() {
 
     body.addEventListener('scroll', onScroll);
     return () => body.removeEventListener('scroll', onScroll);
-  }, [hasMore, isEmby, loadSongsChunk, loadingFirstPage, loadingMore]);
+  }, [hasMore, isCustom, isEmby, loadSongsChunk, loadingFirstPage, loadingMore]);
 
   // 首屏不足一屏时，最多补 2 次，避免用户看到空白又不触发滚动
   useEffect(() => {
-    if (!isEmby) return;
+    if (!isEmby && !isCustom) return;
     if (loadingFirstPage || loadingMore) return;
     if (!hasMore) return;
     if (autoFillAttemptsRef.current >= 2) return;
@@ -501,31 +575,53 @@ export function LibraryPage() {
       autoFillAttemptsRef.current += 1;
       void loadSongsChunk({ reset: false });
     }
-  }, [hasMore, isEmby, loadSongsChunk, loadingFirstPage, loadingMore, songs.length, tableBodyY]);
+  }, [hasMore, isCustom, isEmby, loadSongsChunk, loadingFirstPage, loadingMore, songs.length, tableBodyY]);
 
   const buildTrack = useCallback(
-    (row: EmbySong): Track | null => {
+    (row: UnifiedSong): Track | null => {
       const c = auth.credentials;
-      if (!c || c.protocol !== 'emby') return null;
+      if (!c) return null;
+
       const artist = joinArtists(row.artists);
+
+      if (c.protocol === 'custom') {
+        // 自定义协议
+        const customRow = row as CustomSong;
+        const url = buildCustomAudioUrl({
+          credentials: c,
+          song: customRow,
+          source: customSource,
+        });
+        return {
+          id: customRow.id,
+          title: customRow.name,
+          artist,
+          url,
+        };
+      }
+
+      if (c.protocol !== 'emby') return null;
+
+      // Emby 协议
+      const embyRow = row as EmbySong;
       const quality = loadAudioQuality();
       const maxBitrate = getMaxBitrate(quality);
       const url = buildEmbyAudioUniversalUrl({
         credentials: c,
-        itemId: row.id,
+        itemId: embyRow.id,
         maxStreamingBitrate: maxBitrate,
       });
       return {
-        id: row.id,
-        title: row.name,
+        id: embyRow.id,
+        title: embyRow.name,
         artist,
         url,
       };
     },
-    [auth.credentials],
+    [auth.credentials, customSource],
   );
 
-  const columns: ColumnsType<EmbySong> = useMemo(() => {
+  const columns: ColumnsType<UnifiedSong> = useMemo(() => {
     return [
       {
         title: '歌曲',
@@ -555,7 +651,7 @@ export function LibraryPage() {
                 <div>
                   <Typography.Text style={{ color: token.colorTextSecondary }} ellipsis>
                     {artist}
-                    {row.productionYear ? ` · ${row.productionYear}` : ''}
+                    {'productionYear' in row && row.productionYear ? ` · ${row.productionYear}` : ''}
                   </Typography.Text>
                 </div>
               </div>
@@ -575,21 +671,35 @@ export function LibraryPage() {
       },
       {
         title: '时长',
-        dataIndex: 'runTimeTicks',
-        key: 'runTimeTicks',
+        dataIndex: isCustom ? 'duration' : 'runTimeTicks',
+        key: 'duration',
         width: 90,
         align: 'right',
-        render: (v: unknown) => (
-          <Typography.Text style={{ color: token.colorTextSecondary }}>{formatDurationFromTicks(Number(v))}</Typography.Text>
-        ),
+        render: (_: unknown, row) => {
+          if (isCustom) {
+            const customRow = row as CustomSong;
+            return (
+              <Typography.Text style={{ color: token.colorTextSecondary }}>
+                {formatDurationFromSeconds(customRow.duration)}
+              </Typography.Text>
+            );
+          }
+          const embyRow = row as EmbySong;
+          return (
+            <Typography.Text style={{ color: token.colorTextSecondary }}>
+              {formatDurationFromTicks(embyRow.runTimeTicks)}
+            </Typography.Text>
+          );
+        },
       },
     ];
-  }, [buildTrack, player, token.colorText, token.colorTextSecondary]);
+  }, [buildTrack, isCustom, player, token.colorText, token.colorTextSecondary]);
 
   const c = auth.credentials;
 
   const handlePlayAll = useCallback(async () => {
-    if (!c || c.protocol !== 'emby') return;
+    if (!c) return;
+    if (c.protocol !== 'emby' && c.protocol !== 'custom') return;
     if (songs.length === 0) return;
 
     setPlayAllLoading(true);
@@ -607,40 +717,63 @@ export function LibraryPage() {
 
     await player.playTracks(initialTracks, 0);
 
-    // 大列表优化：先用已加载的歌曲启动播放，再在空闲/下一拍逐步补齐剩余队列，避免一次性构建超大数组
+    // 大列表优化：先用已加载的歌曲启动播放，再在空闲/下一拍逐步补齐剩余队列
     if (total > songs.length) {
       let startIndex = songs.length;
       const limit = 200;
       while (startIndex < total) {
         try {
-          const res = isPlaylistMode
-            ? await embyGetPlaylistSongsPage({
-                credentials: c,
-                playlistId,
-                startIndex,
-                limit,
-                searchTerm: searchTerm || undefined,
+          if (c.protocol === 'custom') {
+            const res = await customGetPlaylistSongsPage({
+              credentials: c,
+              source: customSource,
+              startIndex,
+              limit,
+            });
+
+            const chunkTracks = res.items
+              .map((s) => {
+                const t = buildTrack(s);
+                if (!t) return null;
+                if (seen.has(t.id)) return null;
+                seen.add(t.id);
+                return t;
               })
-            : await embyGetSongsPage({
-                credentials: c,
-                startIndex,
-                limit,
-                searchTerm: searchTerm || undefined,
-              });
+              .filter(Boolean) as Track[];
 
-          const chunkTracks = res.items
-            .map((s) => {
-              const t = buildTrack(s);
-              if (!t) return null;
-              if (seen.has(t.id)) return null;
-              seen.add(t.id);
-              return t;
-            })
-            .filter(Boolean) as Track[];
+            if (chunkTracks.length) player.appendTracks(chunkTracks);
+            if (res.items.length === 0) break;
+            startIndex += res.items.length;
+          } else {
+            const res = isPlaylistMode
+              ? await embyGetPlaylistSongsPage({
+                  credentials: c,
+                  playlistId,
+                  startIndex,
+                  limit,
+                  searchTerm: searchTerm || undefined,
+                })
+              : await embyGetSongsPage({
+                  credentials: c,
+                  startIndex,
+                  limit,
+                  searchTerm: searchTerm || undefined,
+                });
 
-          if (chunkTracks.length) player.appendTracks(chunkTracks);
-          if (res.items.length === 0) break;
-          startIndex += res.items.length;
+            const chunkTracks = res.items
+              .map((s) => {
+                const t = buildTrack(s);
+                if (!t) return null;
+                if (seen.has(t.id)) return null;
+                seen.add(t.id);
+                return t;
+              })
+              .filter(Boolean) as Track[];
+
+            if (chunkTracks.length) player.appendTracks(chunkTracks);
+            if (res.items.length === 0) break;
+            startIndex += res.items.length;
+          }
 
           await new Promise((r) => window.setTimeout(r, 0));
         } catch {
@@ -650,7 +783,7 @@ export function LibraryPage() {
     }
 
     setPlayAllLoading(false);
-  }, [buildTrack, c, isPlaylistMode, player, playlistId, searchTerm, songs, total]);
+  }, [buildTrack, c, customSource, isPlaylistMode, player, playlistId, searchTerm, songs, total]);
 
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -683,30 +816,32 @@ export function LibraryPage() {
               <Space size={8} wrap style={{ marginTop: 6 }}>
                 {connectionTitle ? <Tag color="blue">{connectionTitle}</Tag> : null}
                 <Typography.Text style={{ color: token.colorTextSecondary }}>
-                  {c?.protocol === 'emby'
-                    ? `已加载 ${songs.length.toLocaleString()} / ${total.toLocaleString()} 首${isPlaylistMode ? '（歌单）' : ''}`
+                  {(isEmby || isCustom)
+                    ? `已加载 ${songs.length.toLocaleString()} / ${total.toLocaleString()} 首`
                     : ''}
                 </Typography.Text>
               </Space>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <Input
-                style={{ width: 320, maxWidth: '100%' }}
-                allowClear
-                placeholder={isPlaylistMode ? '搜索歌单内歌曲 / 歌手 / 专辑（服务端搜索）' : '搜索歌曲 / 歌手 / 专辑（服务端搜索）'}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onPressEnter={() => setSearchTerm(searchInput.trim())}
-              />
+              {!isCustom && (
+                <Input
+                  style={{ width: 320, maxWidth: '100%' }}
+                  allowClear
+                  placeholder={isPlaylistMode ? '搜索歌单内歌曲 / 歌手 / 专辑（服务端搜索）' : '搜索歌曲 / 歌手 / 专辑（服务端搜索）'}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onPressEnter={() => setSearchTerm(searchInput.trim())}
+                />
+              )}
 
-              <Button type="primary" loading={playAllLoading} disabled={!isEmby || songs.length === 0} onClick={handlePlayAll}>
-                {isPlaylistMode ? '播放歌单' : '播放全部'}
+              <Button type="primary" loading={playAllLoading} disabled={(!isEmby && !isCustom) || songs.length === 0} onClick={handlePlayAll}>
+                播放全部
               </Button>
             </div>
           </div>
 
-          {c?.protocol !== 'emby' ? (
+          {c?.protocol === 'navidrome' ? (
             <Alert
               type="info"
               showIcon
@@ -718,7 +853,7 @@ export function LibraryPage() {
           {error ? <Alert type="error" showIcon message={error} /> : null}
 
           <div ref={tableWrapRef} style={{ flex: 1, minHeight: 0 }}>
-            <Table<EmbySong>
+            <Table<UnifiedSong>
               virtual
               rowKey={(r) => r.id}
               columns={columns}
@@ -731,20 +866,8 @@ export function LibraryPage() {
               onRow={(record) => {
                 return {
                   onDoubleClick: async () => {
-                    if (!auth.credentials || auth.credentials.protocol !== 'emby') return;
-                    const quality = loadAudioQuality();
-                    const maxBitrate = getMaxBitrate(quality);
-                    const url = buildEmbyAudioUniversalUrl({
-                      credentials: auth.credentials,
-                      itemId: record.id,
-                      maxStreamingBitrate: maxBitrate,
-                    });
-                    const t: Track = {
-                      id: record.id,
-                      title: record.name,
-                      artist: joinArtists(record.artists),
-                      url,
-                    };
+                    const t = buildTrack(record);
+                    if (!t) return;
                     await player.playTrack(t);
                   },
                 };
