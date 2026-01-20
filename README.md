@@ -58,6 +58,20 @@ LinkTune 是一款多协议音乐播放器，支持连接多种自建音乐服�
 - **Windows**: `.exe` (NSIS 安装程序)
 - **Linux**: `.AppImage`
 
+#### macOS 安装说明
+
+由于应用未进行 Apple 签名，首次打开时可能会提示「已损坏，无法打开」。请在终端执行以下命令解除限制：
+
+```bash
+# 对于已安装的应用
+xattr -cr /Applications/LinkTune.app
+
+# 或对于下载的 dmg 文件
+xattr -cr ~/Downloads/LinkTune-*.dmg
+```
+
+然后重新打开应用即可。
+
 ### 从源码构建
 
 请参考下方的 [构建](#构建) 章节。
