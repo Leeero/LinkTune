@@ -19,13 +19,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { usePlayer } from '../PlayerContext';
-
-function formatTime(sec: number) {
-  if (!Number.isFinite(sec) || sec <= 0) return '00:00';
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
+import { formatTime } from '../utils/formatTime';
+import { PlayerQueuePopoverContent } from './PlayerQueuePopoverContent';
 
 export function PlayerBar() {
   const { token } = theme.useToken();
@@ -78,54 +73,6 @@ export function PlayerBar() {
     if (player.playbackMode === 'one') return '单曲循环';
     return '随机播放';
   })();
-
-  const queueListRef = useRef<HTMLDivElement | null>(null);
-  const queueItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  useEffect(() => {
-    if (!queueOpen) return;
-    const activeEl = queueItemRefs.current[player.currentIndex];
-    if (activeEl && typeof activeEl.scrollIntoView === 'function') {
-      activeEl.scrollIntoView({ block: 'nearest' });
-      return;
-    }
-    const listEl = queueListRef.current;
-    if (listEl) listEl.scrollTop = 0;
-  }, [queueOpen, player.currentIndex, player.totalCount]);
-
-  const queueContent = (
-    <div className="linktune-playerbar__queue">
-      <div className="linktune-playerbar__queueHeader">
-        <Typography.Text style={{ color: token.colorText }}>当前播放清单</Typography.Text>
-        <Typography.Text style={{ color: token.colorTextSecondary }}>{player.totalCount} 首</Typography.Text>
-      </div>
-      <div className="linktune-playerbar__queueList" ref={queueListRef}>
-        {player.tracks.length === 0 ? (
-          <Typography.Text style={{ color: token.colorTextSecondary }}>暂无歌曲</Typography.Text>
-        ) : (
-          player.tracks.map((t, idx) => (
-            <button
-              type="button"
-              key={`${t.id}-${idx}`}
-              ref={(el) => {
-                queueItemRefs.current[idx] = el;
-              }}
-              className={
-                'linktune-playerbar__queueItem' + (idx === player.currentIndex ? ' is-active' : '')
-              }
-              onClick={async () => {
-                await player.playTrack(t);
-                setQueueOpen(false);
-              }}
-            >
-              <span className="linktune-playerbar__queueTitle">{t.title}</span>
-              <span className="linktune-playerbar__queueArtist">{t.artist}</span>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
 
   const cssVars = useMemo<CSSProperties>(
     () =>
@@ -243,32 +190,32 @@ export function PlayerBar() {
           </Tooltip>
 
           <Button
-              type="text"
-              className="linktune-playerbar__controlBtn"
-              disabled={disabledAll || !canPrev}
-              icon={<StepBackwardOutlined />}
-              onClick={() => player.playPrev()}
-            />
+            type="text"
+            className="linktune-playerbar__controlBtn"
+            disabled={disabledAll || !canPrev}
+            icon={<StepBackwardOutlined />}
+            onClick={() => player.playPrev()}
+          />
 
           <Button
-              type="primary"
-              shape="circle"
-              className={'linktune-playerbar__playBtn' + (playPulse ? ' is-pulse' : '')}
-              disabled={disabledAll}
-              icon={isError ? <WarningFilled /> : player.isPlaying ? <PauseOutlined /> : <CaretRightFilled />}
-              onClick={() => {
-                triggerPlayPulse();
-                void player.toggle();
-              }}
-            />
+            type="primary"
+            shape="circle"
+            className={'linktune-playerbar__playBtn' + (playPulse ? ' is-pulse' : '')}
+            disabled={disabledAll}
+            icon={isError ? <WarningFilled /> : player.isPlaying ? <PauseOutlined /> : <CaretRightFilled />}
+            onClick={() => {
+              triggerPlayPulse();
+              void player.toggle();
+            }}
+          />
 
-           <Button
-              type="text"
-              className="linktune-playerbar__controlBtn"
-              disabled={disabledAll || !canNext}
-              icon={<StepForwardOutlined />}
-              onClick={() => player.playNext()}
-            />
+          <Button
+            type="text"
+            className="linktune-playerbar__controlBtn"
+            disabled={disabledAll || !canNext}
+            icon={<StepForwardOutlined />}
+            onClick={() => player.playNext()}
+          />
         </div>
 
         <div className="linktune-playerbar__progressRow">
@@ -324,9 +271,15 @@ export function PlayerBar() {
           placement="topRight"
           open={queueOpen}
           onOpenChange={setQueueOpen}
-          content={queueContent}
+          content={
+            <PlayerQueuePopoverContent
+              open={queueOpen}
+              classPrefix="linktune-playerbar"
+              onAfterSelect={() => setQueueOpen(false)}
+            />
+          }
         >
-         <Button type="text" className={'linktune-playerbar__iconBtn' + (queueOpen ? ' is-active' : '')} icon={<FileTextOutlined />} />
+          <Button type="text" className={'linktune-playerbar__iconBtn' + (queueOpen ? ' is-active' : '')} icon={<FileTextOutlined />} />
         </Popover>
 
         <Dropdown menu={moreMenu} trigger={['click']}>

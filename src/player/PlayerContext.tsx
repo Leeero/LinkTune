@@ -1,13 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { buildCoverUrl, loadLrcApiConfig } from '../config/lrcApiConfig';
+import { useAudioElement } from './hooks/useAudioElement';
+import { useElectronTray } from './hooks/useElectronTray';
+import { useLrcCover } from './hooks/useLrcCover';
+import type { PlaybackMode, PlayerStatus } from './playerTypes';
+import { extractWindow, pickRandomIndex } from './utils/queueWindow';
+import { loadPlayerSettings, saveMuted, savePlaybackMode, saveVolume } from './utils/playerSettingsStorage';
 import type { Track } from './types';
-
-type PlaybackMode = 'loop' | 'one' | 'shuffle';
-type PlayerStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-// 虚拟队列窗口大小：只在 state 中保留当前播放歌曲前后各 WINDOW_SIZE 首
-const WINDOW_SIZE = 50;
 
 type PlayerState = {
   /** 播放队列（虚拟窗口，仅包含当前播放附近的歌曲） */
@@ -55,94 +54,13 @@ type PlayerState = {
 const PlayerContext = createContext<PlayerState | null>(null);
 
 
-function pickRandomIndex(len: number, excludeIndex: number) {
-  if (len <= 1) return excludeIndex;
-
-  let next = excludeIndex;
-  // 最小实现：简单重试，避免选中同一首
-  for (let i = 0; i < 8 && next === excludeIndex; i += 1) {
-    next = Math.floor(Math.random() * len);
-  }
-  if (next === excludeIndex) next = (excludeIndex + 1) % len;
-  return next;
-}
-
-/** 从完整列表中提取虚拟窗口 */
-function extractWindow(fullList: Track[], globalIndex: number): { window: Track[]; windowIndex: number; windowStart: number } {
-  const len = fullList.length;
-  if (len === 0) return { window: [], windowIndex: 0, windowStart: 0 };
-
-  const safeIndex = Math.max(0, Math.min(globalIndex, len - 1));
-  const windowStart = Math.max(0, safeIndex - WINDOW_SIZE);
-  const windowEnd = Math.min(len, safeIndex + WINDOW_SIZE + 1);
-  const window = fullList.slice(windowStart, windowEnd);
-  const windowIndex = safeIndex - windowStart;
-
-  return { window, windowIndex, windowStart };
-}
-
 // 加载超时时间（毫秒）
 const LOAD_TIMEOUT = 15000;
 // 卡顿超时时间（毫秒）
 const STALL_TIMEOUT = 8000;
 
-// localStorage keys
-const STORAGE_KEY_VOLUME = 'linktune_player_volume';
-const STORAGE_KEY_MUTED = 'linktune_player_muted';
-const STORAGE_KEY_PLAYBACK_MODE = 'linktune_player_mode';
-
-/** 从 localStorage 加载设置 */
-function loadSettings(): { volume: number; isMuted: boolean; playbackMode: PlaybackMode } {
-  const defaults = { volume: 0.8, isMuted: false, playbackMode: 'loop' as PlaybackMode };
-
-  try {
-    const volumeStr = localStorage.getItem(STORAGE_KEY_VOLUME);
-    const mutedStr = localStorage.getItem(STORAGE_KEY_MUTED);
-    const modeStr = localStorage.getItem(STORAGE_KEY_PLAYBACK_MODE);
-
-    const volume = volumeStr !== null ? parseFloat(volumeStr) : defaults.volume;
-    const isMuted = mutedStr === 'true';
-    const playbackMode = (modeStr === 'loop' || modeStr === 'one' || modeStr === 'shuffle')
-      ? modeStr
-      : defaults.playbackMode;
-
-    return {
-      volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : defaults.volume,
-      isMuted,
-      playbackMode,
-    };
-  } catch {
-    return defaults;
-  }
-}
-
-/** 保存设置到 localStorage */
-function saveVolume(volume: number) {
-  try {
-    localStorage.setItem(STORAGE_KEY_VOLUME, String(volume));
-  } catch {
-    // ignore
-  }
-}
-
-function saveMuted(isMuted: boolean) {
-  try {
-    localStorage.setItem(STORAGE_KEY_MUTED, String(isMuted));
-  } catch {
-    // ignore
-  }
-}
-
-function savePlaybackMode(mode: PlaybackMode) {
-  try {
-    localStorage.setItem(STORAGE_KEY_PLAYBACK_MODE, mode);
-  } catch {
-    // ignore
-  }
-}
-
 // 初始加载设置
-const initialSettings = loadSettings();
+const initialSettings = loadPlayerSettings();
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -179,8 +97,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [volume, _setVolume] = useState(initialSettings.volume);
   const [isMuted, setIsMuted] = useState(initialSettings.isMuted);
 
-  // LrcApi 封面
-  const [lrcCoverUrl, setLrcCoverUrl] = useState<string | null>(null);
+  // LrcApi 封面（内部会做预加载）
+  const lrcCoverUrl = useLrcCover(currentTrack);
 
   // 当前封面：优先 LrcApi，其次 Track 自带
   const currentCoverUrl = lrcCoverUrl || currentTrack?.coverUrl || null;
@@ -255,34 +173,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (audioRef.current) audioRef.current.muted = isMuted;
   }, [isMuted]);
 
-  // 当歌曲切换时，获取 LrcApi 封面并预加载
-  useEffect(() => {
-    setLrcCoverUrl(null);
-
-    if (!currentTrack) return;
-
-    const config = loadLrcApiConfig();
-    if (!config.enabled) {
-      // 预加载 Track 自带封面
-      if (currentTrack.coverUrl) {
-        const img = new Image();
-        img.src = currentTrack.coverUrl;
-      }
-      return;
-    }
-
-    // 构建并预加载 LrcApi 封面
-    const cover = buildCoverUrl(currentTrack.title, currentTrack.artist ?? '', config);
-    if (cover) {
-      const img = new Image();
-      img.onload = () => setLrcCoverUrl(cover);
-      img.onerror = () => {
-        // LrcApi 封面加载失败，回退到 Track 自带封面
-        setLrcCoverUrl(null);
-      };
-      img.src = cover;
-    }
-  }, [currentTrack]);
 
   const computeBuffered = useCallback(() => {
     const audio = audioRef.current;
@@ -405,171 +295,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     playAtIndexRef.current = playAtIndex;
   }, [playAtIndex]);
 
-  // 初始化 audio 实例
-  useEffect(() => {
-    const audio = new Audio();
-    audio.preload = 'metadata';
-    audio.volume = volume;
-    audio.muted = isMuted;
-
-    const initTrack = fullTracksRef.current[globalIndexRef.current];
-    if (initTrack?.url) audio.src = initTrack.url;
-
-    const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime || 0);
-      // 正常播放中，清除卡顿定时器
-      if (stallTimeoutRef.current) {
-        clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
-      }
-    };
-    const onDurationChange = () => {
-      setDuration(audio.duration || 0);
-      computeBuffered();
-    };
-    const onLoadedMetadata = () => {
-      setDuration(audio.duration || 0);
-      computeBuffered();
-    };
-    const onProgress = () => computeBuffered();
-
-    const onLoadStart = () => {
-      setStatus('loading');
-      setErrorMessage(null);
-    };
-
-    const onCanPlay = () => {
-      setStatus('ready');
-      setErrorMessage(null);
-      // 播放成功，重置连续失败计数器
-      consecutiveErrorCountRef.current = 0;
-      // 加载成功，清除超时定时器
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    };
-
-    const onError = () => {
-      setStatus('error');
-      setIsPlaying(false);
-      setErrorMessage('播放失败，请检查网络或文件路径');
-      // 清除超时定时器
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-      // 自动跳到下一首
-      skipToNextOnError();
-    };
-
-    // 播放卡住（waiting/stalled）时设置超时
-    const onWaiting = () => {
-      // 如果已经有卡顿定时器，不重复设置
-      if (stallTimeoutRef.current) return;
-      
-      stallTimeoutRef.current = setTimeout(() => {
-        console.warn('[Player] 播放卡顿超时，跳到下一首');
-        setStatus('error');
-        setErrorMessage('播放卡顿');
-        skipToNextOnError();
-      }, STALL_TIMEOUT);
-    };
-
-    const onStalled = () => {
-      // stalled 表示浏览器尝试获取数据但数据不可用
-      if (stallTimeoutRef.current) return;
-      
-      stallTimeoutRef.current = setTimeout(() => {
-        console.warn('[Player] 数据获取卡顿，跳到下一首');
-        setStatus('error');
-        setErrorMessage('数据加载卡顿');
-        skipToNextOnError();
-      }, STALL_TIMEOUT);
-    };
-
-    // playing 事件：恢复播放时清除卡顿定时器
-    const onPlaying = () => {
-      if (stallTimeoutRef.current) {
-        clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
-      }
-    };
-
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-
-    const onEnded = () => {
-      const list = fullTracksRef.current;
-      const idx = globalIndexRef.current;
-      const mode = playbackModeRef.current;
-
-      if (mode === 'one') {
-        audio.currentTime = 0;
-        void audio.play();
-        return;
-      }
-
-      if (mode === 'shuffle') {
-        const next = pickRandomIndex(list.length, idx);
-        void playAtIndexRef.current?.(next);
-        return;
-      }
-
-      // loop：列表循环
-      if (idx + 1 < list.length) {
-        void playAtIndexRef.current?.(idx + 1);
-      } else if (list.length > 0) {
-        void playAtIndexRef.current?.(0);
-      } else {
-        setIsPlaying(false);
-      }
-    };
-
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('loadedmetadata', onLoadedMetadata);
-    audio.addEventListener('progress', onProgress);
-    audio.addEventListener('loadstart', onLoadStart);
-    audio.addEventListener('canplay', onCanPlay);
-    audio.addEventListener('error', onError);
-    audio.addEventListener('ended', onEnded);
-    audio.addEventListener('waiting', onWaiting);
-    audio.addEventListener('stalled', onStalled);
-    audio.addEventListener('playing', onPlaying);
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
-
-    audioRef.current = audio;
-
-    return () => {
-      audio.pause();
-      // 清除所有定时器
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-      if (stallTimeoutRef.current) {
-        clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
-      }
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
-      audio.removeEventListener('progress', onProgress);
-      audio.removeEventListener('loadstart', onLoadStart);
-      audio.removeEventListener('canplay', onCanPlay);
-      audio.removeEventListener('error', onError);
-      audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('waiting', onWaiting);
-      audio.removeEventListener('stalled', onStalled);
-      audio.removeEventListener('playing', onPlaying);
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
-      audioRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipToNextOnError]);
+  useAudioElement({
+    audioRef,
+    volume,
+    isMuted,
+    fullTracksRef,
+    globalIndexRef,
+    playbackModeRef,
+    playAtIndexRef,
+    loadTimeoutRef,
+    stallTimeoutRef,
+    loadTimeoutMs: LOAD_TIMEOUT,
+    stallTimeoutMs: STALL_TIMEOUT,
+    consecutiveErrorCountRef,
+    setCurrentTime,
+    setDuration,
+    setStatus,
+    setErrorMessage,
+    setIsPlaying,
+    computeBuffered,
+    skipToNextOnError,
+  });
 
   const api = useMemo<PlayerState>(() => {
     const cyclePlaybackMode = () => {
@@ -741,38 +487,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [windowTracks, windowIndex, totalCount, currentTrack, currentCoverUrl, status, errorMessage, playbackMode, isPlaying, currentTime, duration, bufferedTime, bufferedPercent, volume, isMuted, playAtIndex]);
 
-  // 同步播放状态到 Electron 主进程（托盘菜单）
-  useEffect(() => {
-    if (window.linkTune?.updatePlayerState) {
-      window.linkTune.updatePlayerState({
-        isPlaying,
-        currentTrack,
-      });
-    }
-  }, [isPlaying, currentTrack]);
-
-  // 监听来自 Electron 主进程的播放控制命令
-  useEffect(() => {
-    if (!window.linkTune?.onPlayerControl) return;
-
-    window.linkTune.onPlayerControl((command) => {
-      switch (command) {
-        case 'toggle':
-          api.toggle();
-          break;
-        case 'prev':
-          api.playPrev();
-          break;
-        case 'next':
-          api.playNext();
-          break;
-      }
-    });
-
-    return () => {
-      window.linkTune?.removePlayerControlListener?.();
-    };
-  }, [api]);
+  useElectronTray({
+    isPlaying,
+    currentTrack,
+    api,
+  });
 
   return <PlayerContext.Provider value={api}>{children}</PlayerContext.Provider>;
 }
