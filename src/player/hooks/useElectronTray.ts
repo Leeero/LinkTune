@@ -14,9 +14,20 @@ export function useElectronTray(params: { isPlaying: boolean; currentTrack: Trac
   // 同步播放状态到 Electron 主进程（托盘菜单）
   useEffect(() => {
     if (window.linkTune?.updatePlayerState) {
+      const safeTrack = currentTrack
+        ? {
+            id: currentTrack.id,
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            coverUrl: currentTrack.coverUrl,
+            url: currentTrack.url,
+            protocol: currentTrack.protocol,
+            quality: currentTrack.quality,
+          }
+        : null;
       window.linkTune.updatePlayerState({
         isPlaying,
-        currentTrack,
+        currentTrack: safeTrack,
       });
     }
   }, [isPlaying, currentTrack]);

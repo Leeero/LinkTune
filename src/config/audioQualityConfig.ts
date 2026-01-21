@@ -148,3 +148,15 @@ export function getMaxBitrate(protocol: ProtocolId, quality: AudioQuality): numb
   const option = AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol].find((o) => o.value === quality);
   return option?.maxBitrate;
 }
+
+export function getAudioQualityLabel(protocol: ProtocolId, quality: AudioQuality): string {
+  const option = AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol].find((o) => o.value === quality);
+  return option?.label ?? quality;
+}
+
+export function getLowerAudioQuality(protocol: ProtocolId, quality: AudioQuality): AudioQuality | null {
+  const options = AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol];
+  const idx = options.findIndex((o) => o.value === quality);
+  if (idx <= 0) return null;
+  return options[idx - 1].value;
+}

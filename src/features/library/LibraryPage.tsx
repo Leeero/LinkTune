@@ -87,17 +87,22 @@ export function LibraryPage() {
         // 自定义协议
         const customRow = row as CustomSong;
         const quality = loadAudioQuality(c.protocol);
-        const url = buildCustomAudioUrl({
-          credentials: c,
-          song: customRow,
-          source: customSource,
-          quality,
-        });
+        const buildUrl = (q: typeof quality) =>
+          buildCustomAudioUrl({
+            credentials: c,
+            song: customRow,
+            source: customSource,
+            quality: q,
+          });
+        const url = buildUrl(quality);
         return {
           id: customRow.id,
           title: customRow.name,
           artist,
           url,
+          protocol: c.protocol,
+          quality,
+          buildUrl,
         };
       }
 
@@ -106,17 +111,21 @@ export function LibraryPage() {
       // Emby 协议
       const embyRow = row as EmbySong;
       const quality = loadAudioQuality(c.protocol);
-      const maxBitrate = getMaxBitrate(c.protocol, quality);
-      const url = buildEmbyAudioUniversalUrl({
-        credentials: c,
-        itemId: embyRow.id,
-        maxStreamingBitrate: maxBitrate,
-      });
+      const buildUrl = (q: typeof quality) =>
+        buildEmbyAudioUniversalUrl({
+          credentials: c,
+          itemId: embyRow.id,
+          maxStreamingBitrate: getMaxBitrate(c.protocol, q),
+        });
+      const url = buildUrl(quality);
       return {
         id: embyRow.id,
         title: embyRow.name,
         artist,
         url,
+        protocol: c.protocol,
+        quality,
+        buildUrl,
       };
     },
     [auth.credentials, customSource],

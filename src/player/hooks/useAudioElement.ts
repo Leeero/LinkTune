@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { PlaybackMode, PlayerStatus } from '../playerTypes';
 import type { Track } from '../types';
@@ -16,7 +16,6 @@ type Params = {
 
   loadTimeoutRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
   stallTimeoutRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
-  loadTimeoutMs: number;
   stallTimeoutMs: number;
 
   consecutiveErrorCountRef: React.RefObject<number>;
@@ -29,6 +28,7 @@ type Params = {
 
   computeBuffered: () => void;
   skipToNextOnError: () => void;
+  onStallRetry?: (audio: HTMLAudioElement, resumeAt: number) => boolean;
 };
 
 export function useAudioElement(params: Params) {
@@ -42,7 +42,6 @@ export function useAudioElement(params: Params) {
     playAtIndexRef,
     loadTimeoutRef,
     stallTimeoutRef,
-    loadTimeoutMs,
     stallTimeoutMs,
     consecutiveErrorCountRef,
     setCurrentTime,
@@ -52,13 +51,17 @@ export function useAudioElement(params: Params) {
     setIsPlaying,
     computeBuffered,
     skipToNextOnError,
+    onStallRetry,
   } = params;
 
+  const stallRetryRef = useRef(0);
+  const MAX_STALL_RETRY = 1;
+
   // 初始化 audio 实例
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     const audio = new Audio();
-    audio.preload = 'metadata';
+    audio.preload = 'auto';
     audio.volume = volume;
     audio.muted = isMuted;
 
@@ -87,11 +90,13 @@ export function useAudioElement(params: Params) {
     const onProgress = () => computeBuffered();
 
     const onLoadStart = () => {
+      stallRetryRef.current = 0;
       setStatus('loading');
       setErrorMessage(null);
     };
 
     const onCanPlay = () => {
+      stallRetryRef.current = 0;
       setStatus('ready');
       setErrorMessage(null);
       // 播放成功，重置连续失败计数器
@@ -122,6 +127,25 @@ export function useAudioElement(params: Params) {
       if (stallTimeoutRef.current) return;
 
       stallTimeoutRef.current = setTimeout(() => {
+        if (stallRetryRef.current < MAX_STALL_RETRY) {
+          stallRetryRef.current += 1;
+          const resumeAt = audio.currentTime || 0;
+          if (onStallRetry?.(audio, resumeAt)) return;
+          console.warn('[Player] 播放卡顿，尝试重试');
+          setStatus('loading');
+          setErrorMessage('播放卡顿，正在重试');
+          try {
+            audio.load();
+            if (resumeAt > 0) {
+              audio.currentTime = Math.max(0, resumeAt - 1);
+            }
+            void audio.play();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
         console.warn('[Player] 播放卡顿超时，跳到下一首');
         setStatus('error');
         setErrorMessage('播放卡顿');
@@ -134,6 +158,25 @@ export function useAudioElement(params: Params) {
       if (stallTimeoutRef.current) return;
 
       stallTimeoutRef.current = setTimeout(() => {
+        if (stallRetryRef.current < MAX_STALL_RETRY) {
+          stallRetryRef.current += 1;
+          const resumeAt = audio.currentTime || 0;
+          if (onStallRetry?.(audio, resumeAt)) return;
+          console.warn('[Player] 数据加载卡顿，尝试重试');
+          setStatus('loading');
+          setErrorMessage('数据加载卡顿，正在重试');
+          try {
+            audio.load();
+            if (resumeAt > 0) {
+              audio.currentTime = Math.max(0, resumeAt - 1);
+            }
+            void audio.play();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
         console.warn('[Player] 数据获取卡顿，跳到下一首');
         setStatus('error');
         setErrorMessage('数据加载卡顿');
@@ -143,6 +186,7 @@ export function useAudioElement(params: Params) {
 
     // playing 事件：恢复播放时清除卡顿定时器
     const onPlaying = () => {
+      stallRetryRef.current = 0;
       if (stallTimeoutRef.current) {
         clearTimeout(stallTimeoutRef.current);
         stallTimeoutRef.current = null;
@@ -222,4 +266,5 @@ export function useAudioElement(params: Params) {
       audioRef.current = null;
     };
   }, [skipToNextOnError]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }

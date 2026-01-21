@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { getAudioQualityLabel, getLowerAudioQuality } from '../config/audioQualityConfig';
 import { useAudioElement } from './hooks/useAudioElement';
 import { useElectronTray } from './hooks/useElectronTray';
 import { useLrcCover } from './hooks/useLrcCover';
@@ -55,9 +56,9 @@ const PlayerContext = createContext<PlayerState | null>(null);
 
 
 // 加载超时时间（毫秒）
-const LOAD_TIMEOUT = 15000;
+const LOAD_TIMEOUT = 20000;
 // 卡顿超时时间（毫秒）
-const STALL_TIMEOUT = 8000;
+const STALL_TIMEOUT = 12000;
 
 // 初始加载设置
 const initialSettings = loadPlayerSettings();
@@ -197,6 +198,51 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setBufferedPercent(Number.isFinite(percent) ? percent : 0);
   }, []);
 
+  /** 更新虚拟窗口 */
+  const updateWindow = useCallback((globalIndex: number) => {
+    const { window, windowIndex: wIdx } = extractWindow(fullTracksRef.current, globalIndex);
+    setWindowTracks(window);
+    setWindowIndex(wIdx);
+    setTotalCount(fullTracksRef.current.length);
+  }, []);
+
+  /** 卡顿时自动降码率并重试 */
+  const handleStallRetry = useCallback(
+    (audio: HTMLAudioElement, resumeAt: number) => {
+      const list = fullTracksRef.current;
+      const idx = globalIndexRef.current;
+      const track = list[idx];
+      if (!track || !track.buildUrl || !track.protocol || !track.quality) return false;
+
+      const nextQuality = getLowerAudioQuality(track.protocol, track.quality);
+      if (!nextQuality) return false;
+
+      const nextUrl = track.buildUrl(nextQuality);
+      track.quality = nextQuality;
+      track.url = nextUrl;
+      list[idx] = track;
+      updateWindow(idx);
+
+      const label = getAudioQualityLabel(track.protocol, nextQuality);
+      setStatus('loading');
+      setErrorMessage(`网络卡顿，已降码率至 ${label}`);
+
+      try {
+        audio.src = nextUrl;
+        audio.load();
+        if (resumeAt > 0) {
+          audio.currentTime = Math.max(0, resumeAt - 1);
+        }
+        void audio.play();
+      } catch {
+        // ignore
+      }
+
+      return true;
+    },
+    [updateWindow, setStatus, setErrorMessage],
+  );
+
   /** 预加载下一首歌曲 */
   const preloadNext = useCallback(() => {
     const list = fullTracksRef.current;
@@ -215,21 +261,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // 创建或复用预加载 Audio
     if (!preloadAudioRef.current) {
       preloadAudioRef.current = new Audio();
-      preloadAudioRef.current.preload = 'metadata';
+      preloadAudioRef.current.preload = 'auto';
     }
 
     // 避免重复加载同一首
     if (preloadAudioRef.current.src !== nextTrack.url) {
       preloadAudioRef.current.src = nextTrack.url;
     }
-  }, []);
-
-  /** 更新虚拟窗口 */
-  const updateWindow = useCallback((globalIndex: number) => {
-    const { window, windowIndex: wIdx } = extractWindow(fullTracksRef.current, globalIndex);
-    setWindowTracks(window);
-    setWindowIndex(wIdx);
-    setTotalCount(fullTracksRef.current.length);
   }, []);
 
   const playAtIndex = useCallback(
@@ -305,7 +343,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     playAtIndexRef,
     loadTimeoutRef,
     stallTimeoutRef,
-    loadTimeoutMs: LOAD_TIMEOUT,
     stallTimeoutMs: STALL_TIMEOUT,
     consecutiveErrorCountRef,
     setCurrentTime,
@@ -315,6 +352,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsPlaying,
     computeBuffered,
     skipToNextOnError,
+    onStallRetry: handleStallRetry,
   });
 
   const api = useMemo<PlayerState>(() => {

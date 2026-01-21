@@ -113,18 +113,23 @@ export function ToplistSongsPage() {
       if (!c || c.protocol !== 'custom') return null;
 
       const quality = loadAudioQuality(c.protocol);
-      const url = buildCustomAudioUrl({
-        credentials: c,
-        song: row,
-        source,
-        quality,
-      });
+      const buildUrl = (q: typeof quality) =>
+        buildCustomAudioUrl({
+          credentials: c,
+          song: row,
+          source,
+          quality: q,
+        });
+      const url = buildUrl(quality);
 
       return {
         id: row.id,
         title: row.name,
         artist: joinArtists(row.artists),
         url,
+        protocol: c.protocol,
+        quality,
+        buildUrl,
       };
     },
     [auth.credentials, source],

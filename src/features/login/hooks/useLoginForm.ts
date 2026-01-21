@@ -1,5 +1,5 @@
 import { Form, message } from 'antd';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { embyLoginWithPassword } from '../../../protocols/emby/auth';
@@ -25,6 +25,20 @@ export function useLoginForm() {
 
   const [form] = Form.useForm<LoginFormValues>();
 
+  const devDefaults = useMemo(() => {
+    if (!import.meta.env.DEV) return null;
+    return {
+      emby: {
+        baseUrl: String(import.meta.env.VITE_DEV_EMBY_BASE_URL ?? '').trim(),
+        username: String(import.meta.env.VITE_DEV_EMBY_USERNAME ?? '').trim(),
+        password: String(import.meta.env.VITE_DEV_EMBY_PASSWORD ?? ''),
+      },
+      custom: {
+        baseUrl: String(import.meta.env.VITE_DEV_CUSTOM_BASE_URL ?? '').trim(),
+      },
+    };
+  }, []);
+
   const placeholderBaseUrl = useMemo(() => getPlaceholderBaseUrl(protocol), [protocol]);
 
   const onProtocolChange = useCallback(
@@ -36,6 +50,26 @@ export function useLoginForm() {
     },
     [form],
   );
+
+  useEffect(() => {
+    if (!devDefaults) return;
+    const values = form.getFieldsValue(['baseUrl', 'username', 'password']);
+
+    if (protocol === 'emby') {
+      const updates: Partial<LoginFormValues> = {};
+      if (!values.baseUrl && devDefaults.emby.baseUrl) updates.baseUrl = devDefaults.emby.baseUrl;
+      if (!values.username && devDefaults.emby.username) updates.username = devDefaults.emby.username;
+      if (!values.password && devDefaults.emby.password) updates.password = devDefaults.emby.password;
+      if (Object.keys(updates).length) form.setFieldsValue(updates);
+      return;
+    }
+
+    if (protocol === 'custom') {
+      if (!values.baseUrl && devDefaults.custom.baseUrl) {
+        form.setFieldsValue({ baseUrl: devDefaults.custom.baseUrl });
+      }
+    }
+  }, [devDefaults, form, protocol]);
 
   const onSubmit = useCallback(async () => {
     setError(null);
