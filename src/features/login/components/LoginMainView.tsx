@@ -62,8 +62,8 @@ export function LoginMainView(props: Props) {
     return (
       <Typography.Text style={{ color: token.colorTextSecondary }}>
         直接使用服务地址，<b>无需账号密码</b>。可前往{' '}
-        <Typography.Link href="https://tunefree.fun/" target="_blank" rel="noopener noreferrer">
-          tunefree.fun
+        <Typography.Link href="https://api.tunefree.fun/#intro" target="_blank" rel="noopener noreferrer">
+          api.tunefree.fun
         </Typography.Link>{' '}
         获取可用服务地址。
       </Typography.Text>

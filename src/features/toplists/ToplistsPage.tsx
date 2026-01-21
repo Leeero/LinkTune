@@ -40,20 +40,33 @@ export function ToplistsPage() {
     const c = auth.credentials;
     if (!c || c.protocol !== 'custom') return;
 
+    let alive = true;
     const controller = new AbortController();
 
     setLoading(true);
     setError(null);
 
     customGetToplists({ credentials: c, source, signal: controller.signal })
-      .then((list) => setItems(list))
+      .then((list) => {
+        if (!alive) return;
+        setItems(list);
+      })
       .catch((e) => {
+        if (!alive) return;
+        // 请求取消（如路由切换 / React 严格模式 effect 重放）不算错误
+        if (controller.signal.aborted) return;
         const msg = e instanceof Error ? e.message : '获取热门榜单失败';
         setError(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => {
+      alive = false;
+      controller.abort();
+    };
   }, [auth.credentials, source]);
 
   if (!auth.credentials || auth.credentials.protocol !== 'custom') {
@@ -92,7 +105,7 @@ export function ToplistsPage() {
                   });
                 }}
               >
-                <Space size={12} align="start" style={{ width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%' }}>
                   <Avatar
                     shape="square"
                     size={56}
@@ -102,15 +115,19 @@ export function ToplistsPage() {
                     onError={() => true}
                   />
 
-                  <div style={{ minWidth: 0 }}>
-                    <Typography.Text strong ellipsis style={{ display: 'block' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Typography.Text
+                      strong
+                      ellipsis={{ tooltip: it.name }}
+                      style={{ display: 'block', maxWidth: '100%' }}
+                    >
                       {it.name}
                     </Typography.Text>
                     <div style={{ marginTop: 6 }}>
                       <Typography.Text type="secondary">{it.updateFrequency || '更新频率未知'}</Typography.Text>
                     </div>
                   </div>
-                </Space>
+                </div>
               </Card>
             </List.Item>
           );

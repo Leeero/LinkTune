@@ -77,20 +77,33 @@ export function ToplistSongsPage() {
     if (!c || c.protocol !== 'custom') return;
     if (!toplistId) return;
 
+    let alive = true;
     const controller = new AbortController();
 
     setLoading(true);
     setError(null);
 
     customGetToplistSongs({ credentials: c, source, toplistId, signal: controller.signal })
-      .then((list) => setSongs(list))
+      .then((list) => {
+        if (!alive) return;
+        setSongs(list);
+      })
       .catch((e) => {
+        if (!alive) return;
+        // 请求取消不算错误
+        if (controller.signal.aborted) return;
         const msg = e instanceof Error ? e.message : '获取榜单歌曲失败';
         setError(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => {
+      alive = false;
+      controller.abort();
+    };
   }, [auth.credentials, source, toplistId]);
 
   const buildTrack = useCallback(
@@ -182,9 +195,9 @@ export function ToplistSongsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'nowrap' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <Typography.Title level={3} ellipsis={{ tooltip: pageTitle }} style={{ marginBottom: 0 }}>
             {pageTitle}
           </Typography.Title>
           <Space size={8} wrap style={{ marginTop: 6 }}>
@@ -193,7 +206,7 @@ export function ToplistSongsPage() {
           </Space>
         </div>
 
-        <Button type="primary" onClick={handlePlayAll} disabled={songs.length === 0}>
+        <Button type="primary" style={{ flex: '0 0 auto' }} onClick={handlePlayAll} disabled={songs.length === 0}>
           播放全部
         </Button>
       </div>
