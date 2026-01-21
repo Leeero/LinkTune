@@ -51,7 +51,8 @@ body {
 .linktune-sider__menu,
 .linktune-playerbar__queueList,
 .linktune-now__lyrics,
-.linktune-settings {
+.linktune-settings,
+.linktune-contentScroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -66,7 +67,8 @@ body {
 .linktune-playerbar__queueList::-webkit-scrollbar,
 .linktune-now__lyrics::-webkit-scrollbar,
 .linktune-now__queueList::-webkit-scrollbar,
-.linktune-settings::-webkit-scrollbar {
+.linktune-settings::-webkit-scrollbar,
+.linktune-contentScroll::-webkit-scrollbar {
   width: 6px;
 }
 
@@ -75,7 +77,8 @@ body {
 .linktune-playerbar__queueList::-webkit-scrollbar-track,
 .linktune-now__lyrics::-webkit-scrollbar-track,
 .linktune-now__queueList::-webkit-scrollbar-track,
-.linktune-settings::-webkit-scrollbar-track {
+.linktune-settings::-webkit-scrollbar-track,
+.linktune-contentScroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -84,7 +87,8 @@ body {
 .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
 .linktune-now__lyrics::-webkit-scrollbar-thumb,
 .linktune-now__queueList::-webkit-scrollbar-thumb,
-.linktune-settings::-webkit-scrollbar-thumb {
+.linktune-settings::-webkit-scrollbar-thumb,
+.linktune-contentScroll::-webkit-scrollbar-thumb {
   background: rgba(24, 36, 53, 0.28);
   border-radius: 999px;
   border: 2px solid transparent;
@@ -96,7 +100,8 @@ body {
 .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
 .linktune-now__lyrics::-webkit-scrollbar-thumb:hover,
 .linktune-now__queueList::-webkit-scrollbar-thumb:hover,
-.linktune-settings::-webkit-scrollbar-thumb:hover {
+.linktune-settings::-webkit-scrollbar-thumb:hover,
+.linktune-contentScroll::-webkit-scrollbar-thumb:hover {
   background: rgba(24, 36, 53, 0.4);
   background-clip: content-box;
 }
@@ -106,7 +111,8 @@ body {
 .linktune-app[data-theme='dark'] .linktune-playerbar__queueList,
 .linktune-app[data-theme='dark'] .linktune-now__lyrics,
 .linktune-app[data-theme='dark'] .linktune-now__queueList,
-.linktune-app[data-theme='dark'] .linktune-settings {
+.linktune-app[data-theme='dark'] .linktune-settings,
+.linktune-app[data-theme='dark'] .linktune-contentScroll {
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
@@ -116,7 +122,8 @@ body {
 .linktune-app[data-theme='dark'] .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
 .linktune-app[data-theme='dark'] .linktune-now__lyrics::-webkit-scrollbar-thumb,
 .linktune-app[data-theme='dark'] .linktune-now__queueList::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb {
+.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb,
+.linktune-app[data-theme='dark'] .linktune-contentScroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   background-clip: content-box;
 }
@@ -127,7 +134,8 @@ body {
 .linktune-app[data-theme='dark'] .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
 .linktune-app[data-theme='dark'] .linktune-now__lyrics::-webkit-scrollbar-thumb:hover,
 .linktune-app[data-theme='dark'] .linktune-now__queueList::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb:hover {
+.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb:hover,
+.linktune-app[data-theme='dark'] .linktune-contentScroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.32);
   background-clip: content-box;
 }
@@ -223,7 +231,6 @@ body {
 .linktune-playerbar__artist:hover {
   color: var(--lt-primary);
 }
-
 
 .linktune-playerbar__center {
   flex: 1;
@@ -352,7 +359,10 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--lt-text-secondary);
-  transition: transform 120ms ease, color 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .linktune-playerbar__iconBtn .anticon {
@@ -443,7 +453,6 @@ body {
 .linktune-playerbar__iconBtn.is-danger {
   color: var(--lt-error);
 }
-
 
 .linktune-playerbar__playBtn .anticon {
   font-size: 20px;
@@ -550,7 +559,9 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
   z-index: 10;
 }
 
@@ -747,7 +758,9 @@ body {
 .linktune-now__lyricLine {
   font-size: 16px;
   color: var(--np-text-secondary);
-  transition: transform 160ms ease, color 160ms ease;
+  transition:
+    transform 160ms ease,
+    color 160ms ease;
   line-height: 1.6;
   cursor: pointer;
   padding: 2px 8px;
@@ -823,7 +836,10 @@ body {
   border: 0;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 120ms ease, color 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .linktune-now__iconBtn:hover,
@@ -837,7 +853,6 @@ body {
   color: var(--np-primary);
 }
 
-
 .linktune-now__playBtn {
   width: 56px !important;
   height: 56px;
@@ -845,7 +860,9 @@ body {
   background: var(--np-primary);
   border-color: var(--np-primary);
   box-shadow: 0 4px 16px rgba(30, 94, 255, 0.4);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .linktune-now__playBtn:hover {
@@ -867,7 +884,9 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 120ms ease, color 160ms ease;
+  transition:
+    transform 120ms ease,
+    color 160ms ease;
 }
 
 .linktune-now__likeBtn:hover {

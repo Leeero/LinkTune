@@ -6,6 +6,8 @@ import logoImg from '../assets/logo.png';
 import { LibraryPage } from '../features/library/LibraryPage';
 import { NowPlayingPage } from '../features/now-playing/NowPlayingPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
+import { ToplistSongsPage } from '../features/toplists/ToplistSongsPage';
+import { ToplistsPage } from '../features/toplists/ToplistsPage';
 import { PlayerBar } from '../player/components/PlayerBar';
 import { useAuth } from '../session/AuthProvider';
 import { useShellUiStore } from '../stores/shellUiStore';
@@ -31,16 +33,16 @@ export function Shell() {
   const setOpenKeys = useShellUiStore((s) => s.setOpenKeys);
   const ensureOpen = useShellUiStore((s) => s.ensureOpen);
 
-  // custom 协议：始终展开歌单菜单
+  // custom 协议：默认展开榜单菜单
   useEffect(() => {
     if (isCustom) {
-      ensureOpen('/playlists');
+      ensureOpen('/toplists');
     }
   }, [ensureOpen, isCustom]);
 
   useEffect(() => {
-    if (location.pathname.startsWith('/playlists/')) {
-      ensureOpen('/playlists');
+    if (location.pathname.startsWith('/toplists/')) {
+      ensureOpen('/toplists');
     }
   }, [ensureOpen, location.pathname]);
 
@@ -106,11 +108,24 @@ export function Shell() {
               path="*"
               element={
                 <>
-                  <div style={{ padding: '0 20px 20px 20px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div
+                    className="linktune-contentScroll"
+                    style={{
+                      padding: '0 20px 20px 20px',
+                      flex: 1,
+                      minHeight: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                    }}
+                  >
                     <Routes>
-                      <Route path="/" element={isCustom ? <Navigate to="/playlists/netease" replace /> : <LibraryPage />} />
-                      <Route path="/library" element={isCustom ? <Navigate to="/playlists/netease" replace /> : <LibraryPage />} />
+                      <Route path="/" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
+                      <Route path="/library" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
                       <Route path="/playlists/:playlistId" element={<LibraryPage />} />
+                      <Route path="/toplists/:source" element={<ToplistsPage />} />
+                      <Route path="/toplists/:source/:toplistId" element={<ToplistSongsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
                   </div>

@@ -1,5 +1,6 @@
 import {
   CustomerServiceOutlined,
+  FireOutlined,
   SettingOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
@@ -21,14 +22,14 @@ export function buildShellMenuItems(params: {
 }): MenuItem[] {
   const { isCustom, isEmby, playlists, playlistsLoading, playlistsError } = params;
 
-  // 自定义协议：固定歌单列表
+  // 自定义协议：只展示榜单（不展示歌单菜单）
   if (isCustom) {
-    const customPlaylistChildren: MenuItem[] = CUSTOM_PLAYLISTS.map((p) => {
-      const to = `/playlists/${p.id}`;
+    const toplistsChildren: MenuItem[] = CUSTOM_PLAYLISTS.map((p) => {
+      const to = `/toplists/${p.id}`;
       return {
         key: to,
         label: (
-          <Link to={to} state={{ playlistName: p.name, source: p.id }}>
+          <Link to={to} state={{ source: p.id, sourceName: p.name }}>
             {p.name}
           </Link>
         ),
@@ -37,10 +38,10 @@ export function buildShellMenuItems(params: {
 
     return [
       {
-        key: '/playlists',
-        icon: <UnorderedListOutlined />,
-        label: '歌单',
-        children: customPlaylistChildren,
+        key: '/toplists',
+        icon: <FireOutlined />,
+        label: '榜单',
+        children: toplistsChildren,
       },
       {
         key: '/settings',
