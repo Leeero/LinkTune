@@ -1,6 +1,16 @@
+import type { ProtocolId } from '../protocols/types';
+
 // 音质配置
 
-export type AudioQuality = 'low' | 'medium' | 'high' | 'lossless';
+export type AudioQuality =
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'lossless'
+  | '128k'
+  | '320k'
+  | 'flac'
+  | 'flac24bit';
 
 export interface AudioQualityOption {
   value: AudioQuality;
@@ -10,7 +20,7 @@ export interface AudioQualityOption {
   maxBitrate?: number;
 }
 
-export const AUDIO_QUALITY_OPTIONS: AudioQualityOption[] = [
+const EMBY_QUALITY_OPTIONS: AudioQualityOption[] = [
   {
     value: 'low',
     label: '流畅',
@@ -37,29 +47,104 @@ export const AUDIO_QUALITY_OPTIONS: AudioQualityOption[] = [
   },
 ];
 
-const STORAGE_KEY = 'linktune_audio_quality';
+const CUSTOM_QUALITY_OPTIONS: AudioQualityOption[] = [
+  {
+    value: '128k',
+    label: '标准音质',
+    description: '128kbps',
+    maxBitrate: 128_000,
+  },
+  {
+    value: '320k',
+    label: '高品质',
+    description: '320kbps',
+    maxBitrate: 320_000,
+  },
+  {
+    value: 'flac',
+    label: '无损音质',
+    description: '~1000kbps',
+    maxBitrate: 1_000_000,
+  },
+  {
+    value: 'flac24bit',
+    label: 'Hi-Res 音质',
+    description: '~1400kbps',
+    maxBitrate: 1_400_000,
+  },
+];
 
-export function loadAudioQuality(): AudioQuality {
+export const AUDIO_QUALITY_OPTIONS_BY_PROTOCOL: Record<ProtocolId, AudioQualityOption[]> = {
+  emby: EMBY_QUALITY_OPTIONS,
+  navidrome: EMBY_QUALITY_OPTIONS,
+  custom: CUSTOM_QUALITY_OPTIONS,
+};
+
+const STORAGE_KEY = 'linktune_audio_quality_v2';
+const LEGACY_STORAGE_KEY = 'linktune_audio_quality';
+
+const DEFAULT_QUALITY_BY_PROTOCOL: Record<ProtocolId, AudioQuality> = {
+  emby: 'high',
+  navidrome: 'high',
+  custom: '320k',
+};
+
+function normalizeQuality(protocol: ProtocolId, value: string | null | undefined): AudioQuality | null {
+  if (!value) return null;
+  const options = AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol];
+  const hit = options.find((o) => o.value === value);
+  if (hit) return hit.value;
+
+  if (protocol === 'custom') {
+    if (value === 'low') return '128k';
+    if (value === 'medium') return '320k';
+    if (value === 'high') return '320k';
+    if (value === 'lossless') return 'flac';
+  }
+
+  return null;
+}
+
+export function getAudioQualityOptions(protocol: ProtocolId): AudioQualityOption[] {
+  return AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol];
+}
+
+export function loadAudioQuality(protocol: ProtocolId): AudioQuality {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ['low', 'medium', 'high', 'lossless'].includes(stored)) {
-      return stored as AudioQuality;
+    if (stored) {
+      const data = JSON.parse(stored) as Partial<Record<ProtocolId, AudioQuality>>;
+      const normalized = normalizeQuality(protocol, data?.[protocol]);
+      if (normalized) return normalized;
     }
   } catch {
     // ignore
   }
-  return 'high'; // 默认高品质
+
+  // 兼容旧版本
+  try {
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    const normalized = normalizeQuality(protocol, legacy);
+    if (normalized) return normalized;
+  } catch {
+    // ignore
+  }
+
+  return DEFAULT_QUALITY_BY_PROTOCOL[protocol];
 }
 
-export function saveAudioQuality(quality: AudioQuality): void {
+export function saveAudioQuality(protocol: ProtocolId, quality: AudioQuality): void {
   try {
-    localStorage.setItem(STORAGE_KEY, quality);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const data = stored ? (JSON.parse(stored) as Partial<Record<ProtocolId, AudioQuality>>) : {};
+    data[protocol] = quality;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
     // ignore
   }
 }
 
-export function getMaxBitrate(quality: AudioQuality): number | undefined {
-  const option = AUDIO_QUALITY_OPTIONS.find((o) => o.value === quality);
+export function getMaxBitrate(protocol: ProtocolId, quality: AudioQuality): number | undefined {
+  const option = AUDIO_QUALITY_OPTIONS_BY_PROTOCOL[protocol].find((o) => o.value === quality);
   return option?.maxBitrate;
 }

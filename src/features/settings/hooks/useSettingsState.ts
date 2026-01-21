@@ -2,7 +2,7 @@ import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  AUDIO_QUALITY_OPTIONS,
+  getAudioQualityOptions,
   loadAudioQuality,
   saveAudioQuality,
   type AudioQuality,
@@ -22,27 +22,32 @@ export function useSettingsState() {
 
   const [useHardwareAcceleration, setUseHardwareAcceleration] = useState(true);
 
+  const protocol = auth.credentials?.protocol ?? 'emby';
+
   const [lrcConfig, setLrcConfig] = useState<LrcApiConfig>(() => loadLrcApiConfig());
-  const [audioQuality, setAudioQuality] = useState<AudioQuality>(() => loadAudioQuality());
+  const [audioQuality, setAudioQuality] = useState<AudioQuality>(() => loadAudioQuality(protocol));
 
   useEffect(() => {
     setLrcConfig(loadLrcApiConfig());
-    setAudioQuality(loadAudioQuality());
-  }, []);
+    setAudioQuality(loadAudioQuality(protocol));
+  }, [protocol]);
 
   // 监听 storage 事件，同步其他组件修改的音质设置
   useEffect(() => {
     const handleStorageChange = () => {
-      setAudioQuality(loadAudioQuality());
+      setAudioQuality(loadAudioQuality(protocol));
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [protocol]);
 
-  const handleAudioQualityChange = useCallback((quality: AudioQuality) => {
-    setAudioQuality(quality);
-    saveAudioQuality(quality);
-  }, []);
+  const handleAudioQualityChange = useCallback(
+    (quality: AudioQuality) => {
+      setAudioQuality(quality);
+      saveAudioQuality(protocol, quality);
+    },
+    [protocol],
+  );
 
   const handleLrcConfigChange = useCallback(
     (partial: Partial<LrcApiConfig>) => {
@@ -105,7 +110,7 @@ export function useSettingsState() {
 
     lrcConfig,
     audioQuality,
-    AUDIO_QUALITY_OPTIONS,
+    audioQualityOptions: getAudioQualityOptions(protocol),
     getDefaultLrcApiConfig,
 
     handleAudioQualityChange,

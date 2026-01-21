@@ -6,6 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import { CUSTOM_PLAYLISTS } from '../../app/shell/customPlaylists';
 import { buildCustomAudioUrl, type CustomSong } from '../../protocols/custom/library';
+import { loadAudioQuality } from '../../config/audioQualityConfig';
 import type { CustomPlaylistSource } from '../../protocols/custom/library';
 import { customGetToplistSongs } from '../../protocols/custom/toplists';
 import { usePlayer } from '../../player/PlayerContext';
@@ -111,10 +112,12 @@ export function ToplistSongsPage() {
       const c = auth.credentials;
       if (!c || c.protocol !== 'custom') return null;
 
+      const quality = loadAudioQuality(c.protocol);
       const url = buildCustomAudioUrl({
         credentials: c,
         song: row,
         source,
+        quality,
       });
 
       return {

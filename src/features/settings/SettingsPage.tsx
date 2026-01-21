@@ -15,7 +15,7 @@ export function SettingsPage() {
     setUseHardwareAcceleration,
     lrcConfig,
     audioQuality,
-    AUDIO_QUALITY_OPTIONS,
+    audioQualityOptions,
     getDefaultLrcApiConfig,
     handleAudioQualityChange,
     handleLrcConfigChange,
@@ -51,7 +51,7 @@ export function SettingsPage() {
               children: (
                 <Radio.Group value={audioQuality} onChange={(e) => handleAudioQualityChange(e.target.value)}>
                   <Space direction="vertical" size={4}>
-                    {AUDIO_QUALITY_OPTIONS.map((opt) => (
+                    {audioQualityOptions.map((opt) => (
                       <Radio key={opt.value} value={opt.value}>
                         <span>{opt.label}</span>
                         <span style={{ marginLeft: 8, fontSize: 12, color: token.colorTextTertiary }}>{opt.description}</span>

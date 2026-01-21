@@ -86,10 +86,12 @@ export function LibraryPage() {
       if (c.protocol === 'custom') {
         // 自定义协议
         const customRow = row as CustomSong;
+        const quality = loadAudioQuality(c.protocol);
         const url = buildCustomAudioUrl({
           credentials: c,
           song: customRow,
           source: customSource,
+          quality,
         });
         return {
           id: customRow.id,
@@ -103,8 +105,8 @@ export function LibraryPage() {
 
       // Emby 协议
       const embyRow = row as EmbySong;
-      const quality = loadAudioQuality();
-      const maxBitrate = getMaxBitrate(quality);
+      const quality = loadAudioQuality(c.protocol);
+      const maxBitrate = getMaxBitrate(c.protocol, quality);
       const url = buildEmbyAudioUniversalUrl({
         credentials: c,
         itemId: embyRow.id,

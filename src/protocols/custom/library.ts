@@ -143,8 +143,9 @@ export function buildCustomAudioUrl(params: {
   credentials: CustomCredentials;
   song: CustomSong;
   source: CustomPlaylistSource;
+  quality?: string;
 }): string {
-  const { credentials, song, source } = params;
+  const { credentials, song, source, quality } = params;
 
   // 如果歌曲本身有 URL，直接返回
   if (song.url) {
@@ -152,10 +153,13 @@ export function buildCustomAudioUrl(params: {
   }
 
   // 否则构建获取播放 URL 的接口
-  // 假设格式为：{baseUrl}/getSongUrl?source={source}&id={id}
-  const url = new URL('/getSongUrl', credentials.baseUrl);
+  // 格式：{baseUrl}/api/?source={source}&id={id}&type=url&br={quality}
+  const url = new URL('/api/', credentials.baseUrl);
   url.searchParams.set('source', source);
   url.searchParams.set('id', song.id);
+  url.searchParams.set('type', 'url');
+  const br = (quality ?? '320k').trim();
+  if (br) url.searchParams.set('br', `[${br}]`);
 
   return url.toString();
 }
