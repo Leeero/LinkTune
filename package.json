@@ -36,6 +36,7 @@
     "@capacitor/core": "^7.0.0",
     "antd": "^5.24.0",
     "blueimp-md5": "^2.19.0",
+    "idb": "^8.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",

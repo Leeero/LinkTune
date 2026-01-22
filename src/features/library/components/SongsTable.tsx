@@ -4,21 +4,24 @@ import type { RefObject } from 'react';
 
 import type { UnifiedSong } from '../types';
 
-export function SongsTable(props: {
+type Props<T = UnifiedSong> = {
   tableWrapRef: RefObject<HTMLDivElement | null>;
-  songs: UnifiedSong[];
-  columns: ColumnsType<UnifiedSong>;
+  songs: T[];
+  columns: ColumnsType<T>;
   loading: boolean;
   tableBodyY: number;
-  onRowDoubleClick: (row: UnifiedSong) => void;
-}) {
-  const { tableWrapRef, songs, columns, loading, tableBodyY, onRowDoubleClick } = props;
+  rowKey?: string | ((row: T) => string);
+  onRowDoubleClick: (row: T) => void;
+};
+
+export function SongsTable<T extends { id: string }>(props: Props<T>) {
+  const { tableWrapRef, songs, columns, loading, tableBodyY, rowKey, onRowDoubleClick } = props;
 
   return (
     <div ref={tableWrapRef} style={{ flex: 1, minHeight: 0 }}>
-      <Table<UnifiedSong>
+      <Table<T>
         virtual
-        rowKey={(r) => r.id}
+        rowKey={rowKey ?? ((r) => r.id)}
         columns={columns}
         dataSource={songs}
         loading={loading}

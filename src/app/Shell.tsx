@@ -1,9 +1,12 @@
 import { Layout, Menu, Typography, theme } from 'antd';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import logoImg from '../assets/logo.png';
 import { LibraryPage } from '../features/library/LibraryPage';
+import { LocalPlaylistDetailPage } from '../features/local-playlists/LocalPlaylistDetailPage';
+import { LocalPlaylistsPage } from '../features/local-playlists/LocalPlaylistsPage';
+import { getLocalPlaylists, type LocalPlaylist } from '../features/local-playlists/localPlaylistDB';
 import { NowPlayingPage } from '../features/now-playing/NowPlayingPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { ToplistSongsPage } from '../features/toplists/ToplistSongsPage';
@@ -29,6 +32,24 @@ export function Shell() {
 
   const { playlists, loading: playlistsLoading, error: playlistsError } = useEmbyPlaylists(auth.credentials);
 
+  const [localPlaylists, setLocalPlaylists] = useState<LocalPlaylist[]>([]);
+
+  const refreshLocalPlaylists = useCallback(async () => {
+    if (isCustom) {
+      const list = await getLocalPlaylists();
+      setLocalPlaylists(list);
+    }
+  }, [isCustom]);
+
+  useEffect(() => {
+    void refreshLocalPlaylists();
+  }, [refreshLocalPlaylists]);
+
+  // 路由变化时刷新（处理同 tab 内的变更）
+  useEffect(() => {
+    void refreshLocalPlaylists();
+  }, [location.pathname, refreshLocalPlaylists]);
+
   const openKeys = useShellUiStore((s) => s.openKeys);
   const setOpenKeys = useShellUiStore((s) => s.setOpenKeys);
   const ensureOpen = useShellUiStore((s) => s.ensureOpen);
@@ -53,8 +74,9 @@ export function Shell() {
       playlists,
       playlistsLoading,
       playlistsError,
+      localPlaylists,
     });
-  }, [isCustom, isEmby, playlists, playlistsError, playlistsLoading]);
+  }, [isCustom, isEmby, localPlaylists, playlists, playlistsError, playlistsLoading]);
 
   return (
     <Layout
@@ -124,6 +146,8 @@ export function Shell() {
                       <Route path="/" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
                       <Route path="/library" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
                       <Route path="/playlists/:playlistId" element={<LibraryPage />} />
+                      <Route path="/local-playlists" element={<LocalPlaylistsPage />} />
+                      <Route path="/local-playlists/:playlistId" element={<LocalPlaylistDetailPage />} />
                       <Route path="/toplists/:source" element={<ToplistsPage />} />
                       <Route path="/toplists/:source/:toplistId" element={<ToplistSongsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />

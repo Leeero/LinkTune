@@ -3,6 +3,7 @@ import {
   CaretRightFilled,
   EllipsisOutlined,
   FileTextOutlined,
+  HeartOutlined,
   PauseOutlined,
   PictureOutlined,
   RetweetOutlined,
@@ -15,9 +16,11 @@ import {
 import { Button, Dropdown, Popover, Slider, Tooltip, Typography, message, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { AddToPlaylistModal } from '../../features/local-playlists/AddToPlaylistModal';
+import type { LocalPlaylistSong } from '../../features/local-playlists/localPlaylistDB';
 import { usePlayer } from '../PlayerContext';
 import { formatTime } from '../utils/formatTime';
 import { PlayerQueuePopoverContent } from './PlayerQueuePopoverContent';
@@ -50,16 +53,41 @@ export function PlayerBar() {
   const navigate = useNavigate();
 
   const [queueOpen, setQueueOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+
+  const songToAdd: LocalPlaylistSong | null = useMemo(() => {
+    const track = player.currentTrack;
+    if (!track || track.protocol !== 'custom') return null;
+    return {
+      id: track.id,
+      name: track.title,
+      artists: track.artists ?? (track.artist ? [track.artist] : []),
+      source: track.source ?? 'netease',
+      addedAt: Date.now(),
+    };
+  }, [player.currentTrack]);
+
+  const handleAddToPlaylist = useCallback(() => {
+    if (!songToAdd) {
+      message.warning('当前歌曲不支持收藏');
+      return;
+    }
+    setAddModalOpen(true);
+  }, [songToAdd]);
 
   const moreMenu: MenuProps = {
     items: [
-      { key: 'add', label: '添加到歌单（占位）' },
-      { key: 'artist', label: '查看歌手（占位）' },
-      { key: 'report', label: '举报（占位）' },
+      { key: 'add', label: '添加到歌单', icon: <HeartOutlined />, disabled: !songToAdd },
       { type: 'divider' },
       { key: 'remove', label: '从队列移除（占位）', danger: true },
     ],
-    onClick: ({ key }) => message.info(`点击：${key}（原型占位）`),
+    onClick: ({ key }) => {
+      if (key === 'add') {
+        handleAddToPlaylist();
+      } else {
+        message.info(`点击：${key}（原型占位）`);
+      }
+    },
   };
 
   const modeIcon = (() => {
@@ -245,6 +273,16 @@ export function PlayerBar() {
 
       {/* 右侧：160px */}
       <div className="linktune-playerbar__right">
+        <Tooltip title="收藏到歌单">
+          <Button
+            type="text"
+            className="linktune-playerbar__iconBtn"
+            icon={<HeartOutlined />}
+            disabled={!songToAdd}
+            onClick={handleAddToPlaylist}
+          />
+        </Tooltip>
+
         <Popover
           trigger="click"
           placement="top"
@@ -287,6 +325,11 @@ export function PlayerBar() {
         </Dropdown>
       </div>
 
+      <AddToPlaylistModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        song={songToAdd}
+      />
     </div>
   );
 }

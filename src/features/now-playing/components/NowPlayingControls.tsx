@@ -1,6 +1,7 @@
 import {
   CaretRightFilled,
   FileTextOutlined,
+  HeartOutlined,
   PauseOutlined,
   RetweetOutlined,
   SoundOutlined,
@@ -10,17 +11,20 @@ import {
   WarningFilled,
 } from '@ant-design/icons';
 import { Button, Popover, Slider, Tooltip, message } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PlayerQueuePopoverContent } from '../../../player/components/PlayerQueuePopoverContent';
 import { usePlayer } from '../../../player/PlayerContext';
 import { formatTime } from '../../../player/utils/formatTime';
+import { AddToPlaylistModal } from '../../local-playlists/AddToPlaylistModal';
+import type { LocalPlaylistSong } from '../../local-playlists/localPlaylistDB';
 
 export function NowPlayingControls() {
   const player = usePlayer();
 
   const [seekingValue, setSeekingValue] = useState<number | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   const isLoading = player.status === 'loading';
   const isError = player.status === 'error';
@@ -31,6 +35,26 @@ export function NowPlayingControls() {
   const canNext = player.currentIndex + 1 < player.totalCount;
 
   const duration = useMemo(() => Math.max(0, player.duration || 0), [player.duration]);
+
+  const songToAdd: LocalPlaylistSong | null = useMemo(() => {
+    const track = player.currentTrack;
+    if (!track || track.protocol !== 'custom') return null;
+    return {
+      id: track.id,
+      name: track.title,
+      artists: track.artists ?? (track.artist ? [track.artist] : []),
+      source: track.source ?? 'netease',
+      addedAt: Date.now(),
+    };
+  }, [player.currentTrack]);
+
+  const handleAddToPlaylist = useCallback(() => {
+    if (!songToAdd) {
+      message.warning('当前歌曲不支持收藏');
+      return;
+    }
+    setAddModalOpen(true);
+  }, [songToAdd]);
 
   // 切歌时重置拖拽进度
   useEffect(() => {
@@ -134,6 +158,16 @@ export function NowPlayingControls() {
               icon={<FileTextOutlined />}
             />
           </Popover>
+
+          <Tooltip title="收藏到歌单">
+            <Button
+              type="text"
+              className="linktune-now__iconBtn"
+              icon={<HeartOutlined />}
+              disabled={!songToAdd}
+              onClick={handleAddToPlaylist}
+            />
+          </Tooltip>
         </div>
 
         <div className="linktune-now__progress">
@@ -160,6 +194,12 @@ export function NowPlayingControls() {
           <span className="linktune-now__time">{formatTime(player.duration)}</span>
         </div>
       </div>
+
+      <AddToPlaylistModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        song={songToAdd}
+      />
     </div>
   );
 }

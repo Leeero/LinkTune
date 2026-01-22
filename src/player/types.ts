@@ -12,4 +12,9 @@ export type Track = {
   protocol?: ProtocolId;
   quality?: AudioQuality;
   buildUrl?: (quality: AudioQuality) => string;
+
+  /** 自定义协议的来源（netease/kuwo/qq），用于收藏到歌单 */
+  source?: string;
+  /** 艺术家数组，用于收藏到歌单 */
+  artists?: string[];
 };

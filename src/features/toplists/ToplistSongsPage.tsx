@@ -1,4 +1,4 @@
-import { PlayCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, Button, Space, Tag, Typography, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +13,8 @@ import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
 import { useAuth } from '../../session/AuthProvider';
 import { SongsTable } from '../library/components/SongsTable';
+import { AddToPlaylistModal } from '../local-playlists/AddToPlaylistModal';
+import type { LocalPlaylistSong } from '../local-playlists/localPlaylistDB';
 import type { UnifiedSong } from '../library/types';
 import { joinArtists } from '../library/utils/format';
 
@@ -46,6 +48,9 @@ export function ToplistSongsPage() {
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const [tableBodyY, setTableBodyY] = useState<number>(420);
+
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [songToAdd, setSongToAdd] = useState<LocalPlaylistSong | null>(null);
 
   useEffect(() => {
     const el = tableWrapRef.current;
@@ -130,10 +135,23 @@ export function ToplistSongsPage() {
         protocol: c.protocol,
         quality,
         buildUrl,
+        source,
+        artists: row.artists,
       };
     },
     [auth.credentials, source],
   );
+
+  const handleAddToPlaylist = useCallback((row: CustomSong) => {
+    setSongToAdd({
+      id: row.id,
+      name: row.name,
+      artists: row.artists,
+      source,
+      addedAt: Date.now(),
+    });
+    setAddModalOpen(true);
+  }, [source]);
 
   const columns: ColumnsType<UnifiedSong> = useMemo(() => {
     return [
@@ -157,6 +175,12 @@ export function ToplistSongsPage() {
                   await player.playTrack(t);
                 }}
               />
+              <Button
+                type="text"
+                icon={<PlusOutlined />}
+                onClick={() => handleAddToPlaylist(row as CustomSong)}
+                title="添加到歌单"
+              />
 
               <div style={{ minWidth: 0 }}>
                 <Typography.Text strong style={{ color: token.colorText }} ellipsis>
@@ -173,7 +197,7 @@ export function ToplistSongsPage() {
         },
       },
     ];
-  }, [buildTrack, player, token.colorText, token.colorTextSecondary]);
+  }, [buildTrack, handleAddToPlaylist, player, token.colorText, token.colorTextSecondary]);
 
   const sourceLabel = labelForSource(source);
   const pageTitle = toplistName ? `榜单 · ${toplistName}` : `榜单 · ${sourceLabel}`;
@@ -232,6 +256,15 @@ export function ToplistSongsPage() {
           if (!t) return;
           await player.playTrack(t);
         }}
+      />
+
+      <AddToPlaylistModal
+        open={addModalOpen}
+        onClose={() => {
+          setAddModalOpen(false);
+          setSongToAdd(null);
+        }}
+        song={songToAdd}
       />
     </div>
   );

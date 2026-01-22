@@ -1,6 +1,8 @@
 import {
   CustomerServiceOutlined,
   FireOutlined,
+  FolderOutlined,
+  PlusOutlined,
   SettingOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
@@ -9,6 +11,7 @@ import type { MenuProps } from 'antd';
 import { Link } from 'react-router-dom';
 
 import type { EmbyPlaylist } from '../../protocols/emby/types';
+import type { LocalPlaylist } from '../../features/local-playlists/localPlaylistDB';
 import { CUSTOM_PLAYLISTS } from './customPlaylists';
 
 type MenuItem = NonNullable<MenuProps['items']>[number];
@@ -19,10 +22,11 @@ export function buildShellMenuItems(params: {
   playlists: EmbyPlaylist[];
   playlistsLoading: boolean;
   playlistsError: string | null;
+  localPlaylists?: LocalPlaylist[];
 }): MenuItem[] {
-  const { isCustom, isEmby, playlists, playlistsLoading, playlistsError } = params;
+  const { isCustom, isEmby, playlists, playlistsLoading, playlistsError, localPlaylists = [] } = params;
 
-  // 自定义协议：只展示榜单（不展示歌单菜单）
+  // 自定义协议
   if (isCustom) {
     const toplistsChildren: MenuItem[] = CUSTOM_PLAYLISTS.map((p) => {
       const to = `/toplists/${p.id}`;
@@ -36,12 +40,48 @@ export function buildShellMenuItems(params: {
       };
     });
 
+    const localPlaylistChildren: MenuItem[] = [
+      {
+        key: '/local-playlists/__create',
+        icon: <PlusOutlined />,
+        label: <Link to="/local-playlists">新建歌单</Link>,
+      },
+      ...(localPlaylists.length > 0
+        ? localPlaylists.map((p) => {
+            const to = `/local-playlists/${p.id}`;
+            return {
+              key: to,
+              label: (
+                <Tooltip title={p.name} placement="right" mouseEnterDelay={0.2} destroyTooltipOnHide>
+                  <Link
+                    to={to}
+                    state={{ playlistName: p.name }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}
+                  >
+                    <span title={p.name} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name}
+                    </span>
+                    <span style={{ opacity: 0.65, fontSize: 12, flex: '0 0 auto' }}>{p.songs.length}</span>
+                  </Link>
+                </Tooltip>
+              ),
+            };
+          })
+        : []),
+    ];
+
     return [
       {
         key: '/toplists',
         icon: <FireOutlined />,
         label: '榜单',
         children: toplistsChildren,
+      },
+      {
+        key: '/local-playlists',
+        icon: <FolderOutlined />,
+        label: <Link to="/local-playlists">歌单</Link>,
+        children: localPlaylistChildren,
       },
       {
         key: '/settings',
