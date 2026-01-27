@@ -25,13 +25,22 @@ export function useLrcCover(currentTrack: Track | null) {
     // 构建并预加载 LrcApi 封面
     const cover = buildCoverUrl(currentTrack.title, currentTrack.artist ?? '', config);
     if (cover) {
+      let cancelled = false;
       const img = new Image();
-      img.onload = () => setLrcCoverUrl(cover);
+      img.onload = () => {
+        if (!cancelled) setLrcCoverUrl(cover);
+      };
       img.onerror = () => {
-        // LrcApi 封面加载失败，回退到 Track 自带封面
-        setLrcCoverUrl(null);
+        if (!cancelled) setLrcCoverUrl(null);
       };
       img.src = cover;
+
+      return () => {
+        cancelled = true;
+        // 清理回调引用，帮助 GC
+        img.onload = null;
+        img.onerror = null;
+      };
     }
   }, [currentTrack]);
 

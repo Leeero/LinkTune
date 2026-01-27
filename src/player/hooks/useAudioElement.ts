@@ -57,6 +57,10 @@ export function useAudioElement(params: Params) {
   const stallRetryRef = useRef(0);
   const MAX_STALL_RETRY = 1;
 
+  // 节流：上次更新时间戳（用于 timeupdate 节流）
+  const lastTimeUpdateRef = useRef(0);
+  const TIME_UPDATE_THROTTLE = 250; // 最多 4fps，足够流畅且省性能
+
   // 初始化 audio 实例
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -69,6 +73,11 @@ export function useAudioElement(params: Params) {
     if (initTrack?.url) audio.src = initTrack.url;
 
     const onTimeUpdate = () => {
+      // 节流：限制更新频率，避免高频渲染
+      const now = performance.now();
+      if (now - lastTimeUpdateRef.current < TIME_UPDATE_THROTTLE) return;
+      lastTimeUpdateRef.current = now;
+
       setCurrentTime(audio.currentTime || 0);
       // 正常播放中，清除卡顿定时器
       if (stallTimeoutRef.current) {

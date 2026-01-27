@@ -113,6 +113,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const consecutiveErrorCountRef = useRef<number>(0);
   const MAX_CONSECUTIVE_ERRORS = 5;
 
+  // 组件卸载时清理预加载 Audio
+  useEffect(() => {
+    return () => {
+      if (preloadAudioRef.current) {
+        preloadAudioRef.current.src = '';
+        preloadAudioRef.current = null;
+      }
+    };
+  }, []);
+
   /** 清除加载相关的定时器 */
   const clearLoadTimers = useCallback(() => {
     if (loadTimeoutRef.current) {
