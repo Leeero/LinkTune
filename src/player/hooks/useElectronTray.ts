@@ -6,6 +6,7 @@ type PlayerControlApi = {
   toggle: () => Promise<void>;
   playPrev: () => Promise<void>;
   playNext: () => Promise<void>;
+  stop?: () => void;
 };
 
 export function useElectronTray(params: { isPlaying: boolean; currentTrack: Track | null; api: PlayerControlApi }) {
@@ -46,6 +47,9 @@ export function useElectronTray(params: { isPlaying: boolean; currentTrack: Trac
           break;
         case 'next':
           api.playNext();
+          break;
+        case 'stop':
+          api.stop?.();
           break;
       }
     });

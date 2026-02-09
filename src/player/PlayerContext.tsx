@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getAudioQualityLabel, getLowerAudioQuality } from '../config/audioQualityConfig';
+import { addPlayHistory } from '../features/history/historyDB';
 import { useAudioElement } from './hooks/useAudioElement';
 import { useElectronTray } from './hooks/useElectronTray';
 import { useLrcCover } from './hooks/useLrcCover';
@@ -359,6 +360,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         await audio.play();
         // 播放成功后预加载下一首
         preloadNext();
+        // 播放成功后重置连续错误计数器
+        consecutiveErrorCountRef.current = 0;
+        // 记录播放历史（仅 custom 协议）
+        if (t.protocol === 'custom' && t.platform) {
+          void addPlayHistory({
+            id: t.id,
+            name: t.title,
+            artists: t.artists || (t.artist ? [t.artist] : []),
+            platform: t.platform,
+            coverUrl: t.coverUrl,
+          });
+        }
       } catch {
         // 常见原因：平台阻止自动播放；由用户点击触发即可
       }
@@ -421,6 +434,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const existingIndex = list.findIndex((t) => t.id === track.id);
 
       if (existingIndex >= 0) {
+        // 更新已存在的 track，合并新的字段（如 platform、artists 等）
+        const existingTrack = list[existingIndex];
+        const updatedTrack = {
+          ...existingTrack,
+          // 如果新 track 有这些字段，优先使用新值
+          platform: track.platform || existingTrack.platform,
+          artists: track.artists || existingTrack.artists,
+          coverUrl: track.coverUrl || existingTrack.coverUrl,
+        };
+        list[existingIndex] = updatedTrack;
+        fullTracksRef.current = [...list];
         await playAtIndex(existingIndex);
         return;
       }
@@ -574,10 +598,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [windowTracks, windowIndex, totalCount, currentTrack, currentCoverUrl, status, errorMessage, playbackMode, isPlaying, currentTime, duration, bufferedTime, bufferedPercent, volume, isMuted, playAtIndex]);
 
+  // stop 函数引用，用于 useElectronTray
+  const stopRef = useRef<() => void>(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setCurrentTime(0);
+  });
+
   useElectronTray({
     isPlaying,
     currentTrack,
-    api,
+    api: {
+      toggle: api.toggle,
+      playPrev: api.playPrev,
+      playNext: api.playNext,
+      stop: stopRef.current,
+    },
   });
 
   return <PlayerContext.Provider value={api}>{children}</PlayerContext.Provider>;

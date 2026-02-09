@@ -2,7 +2,9 @@ import {
   CustomerServiceOutlined,
   FireOutlined,
   FolderOutlined,
+  HistoryOutlined,
   PlusOutlined,
+  SearchOutlined,
   SettingOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
@@ -71,6 +73,16 @@ export function buildShellMenuItems(params: {
     ];
 
     return [
+      {
+        key: '/search',
+        icon: <SearchOutlined />,
+        label: <Link to="/search">搜索</Link>,
+      },
+      {
+        key: '/history',
+        icon: <HistoryOutlined />,
+        label: <Link to="/history">播放历史</Link>,
+      },
       {
         key: '/toplists',
         icon: <FireOutlined />,

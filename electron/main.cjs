@@ -1,5 +1,5 @@
 const path = require('path');
-const { app, BrowserWindow, session, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, session, Tray, Menu, ipcMain, nativeImage, globalShortcut } = require('electron');
 
 let mainWindow = null;
 let tray = null;
@@ -211,10 +211,37 @@ ipcMain.on('player-state-update', (_event, state) => {
   updateTrayMenu();
 });
 
+/**
+ * 注册全局媒体快捷键
+ * 支持系统媒体键控制播放
+ */
+function registerMediaKeys() {
+  // 播放/暂停
+  globalShortcut.register('MediaPlayPause', () => {
+    mainWindow?.webContents.send('player-control', 'toggle');
+  });
+
+  // 下一曲
+  globalShortcut.register('MediaNextTrack', () => {
+    mainWindow?.webContents.send('player-control', 'next');
+  });
+
+  // 上一曲
+  globalShortcut.register('MediaPreviousTrack', () => {
+    mainWindow?.webContents.send('player-control', 'prev');
+  });
+
+  // 停止
+  globalShortcut.register('MediaStop', () => {
+    mainWindow?.webContents.send('player-control', 'stop');
+  });
+}
+
 app.whenReady().then(() => {
   setupCorsProxy();
   mainWindow = createMainWindow();
   createTray();
+  registerMediaKeys();
 
   app.on('activate', () => {
     if (mainWindow) {
@@ -236,4 +263,9 @@ app.on('window-all-closed', () => {
 // 应用退出前清理
 app.on('before-quit', () => {
   app.isQuitting = true;
+});
+
+// 应用退出时注销所有快捷键
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });

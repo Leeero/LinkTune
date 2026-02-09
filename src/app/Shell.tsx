@@ -3,15 +3,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import logoImg from '../assets/logo.png';
+import { HistoryPage } from '../features/history/HistoryPage';
 import { LibraryPage } from '../features/library/LibraryPage';
 import { LocalPlaylistDetailPage } from '../features/local-playlists/LocalPlaylistDetailPage';
 import { LocalPlaylistsPage } from '../features/local-playlists/LocalPlaylistsPage';
 import { getLocalPlaylists, type LocalPlaylist } from '../features/local-playlists/localPlaylistDB';
 import { NowPlayingPage } from '../features/now-playing/NowPlayingPage';
+import { SearchPage } from '../features/search/SearchPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { ToplistSongsPage } from '../features/toplists/ToplistSongsPage';
 import { ToplistsPage } from '../features/toplists/ToplistsPage';
 import { PlayerBar } from '../player/components/PlayerBar';
+import { useGlobalShortcuts } from '../player/hooks/useGlobalShortcuts';
 import { useAuth } from '../session/AuthProvider';
 import { useShellUiStore } from '../stores/shellUiStore';
 import { useThemeMode } from '../theme/ThemeProvider';
@@ -25,6 +28,9 @@ export function Shell() {
   const { token } = theme.useToken();
   const { mode } = useThemeMode();
   const auth = useAuth();
+
+  // 启用全局快捷键
+  useGlobalShortcuts();
 
   const isDark = mode === 'dark';
   const isEmby = auth.credentials?.protocol === 'emby';
@@ -161,6 +167,8 @@ export function Shell() {
                     <Routes>
                       <Route path="/" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
                       <Route path="/library" element={isCustom ? <Navigate to="/toplists/netease" replace /> : <LibraryPage />} />
+                      <Route path="/search" element={<SearchPage />} />
+                      <Route path="/history" element={<HistoryPage />} />
                       <Route path="/playlists/:playlistId" element={<LibraryPage />} />
                       <Route path="/local-playlists" element={<LocalPlaylistsPage />} />
                       <Route path="/local-playlists/:playlistId" element={<LocalPlaylistDetailPage />} />

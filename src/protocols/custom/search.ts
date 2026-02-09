@@ -109,13 +109,15 @@ function evaluateTemplateExpr(
     // 创建一个包含变量的执行环境
     const varNames = Object.keys(vars);
     const varValues = Object.values(vars);
-     
+    
+    // 构建函数体，注入所有变量
     const fn = new Function(...varNames, `return ${expr}`);
     const result = fn(...varValues);
     return result;
-  } catch {
-    // 如果执行失败，返回原始表达式
-    return `{{${expr}}}`;
+  } catch (e) {
+    // 如果执行失败，打印错误信息并返回空字符串
+    console.warn('模板表达式执行失败:', expr, '错误:', e);
+    return '';
   }
 }
 
@@ -128,7 +130,8 @@ function replaceTemplateVars(
   vars: Record<string, string | number>,
 ): string {
   // 匹配 {{...}} 模式
-  return template.replace(/\{\{(.+?)\}\}/g, (_, expr: string) => {
+  // 使用非贪婪匹配，确保正确匹配嵌套括号的表达式
+  return template.replace(/\{\{(.+?)\}\}/g, (match, expr: string) => {
     const trimmedExpr = expr.trim();
     // 如果是简单变量名，直接替换
     if (trimmedExpr in vars) {
@@ -136,6 +139,11 @@ function replaceTemplateVars(
     }
     // 否则尝试执行表达式
     const result = evaluateTemplateExpr(trimmedExpr, vars);
+    // 如果结果仍然是模板格式，说明执行失败了
+    if (typeof result === 'string' && result.startsWith('{{')) {
+      console.warn('模板表达式执行失败:', trimmedExpr, '变量:', vars);
+      return '';  // 返回空字符串而不是原始模板
+    }
     return String(result);
   });
 }
@@ -289,11 +297,13 @@ export async function customSearchSongs(params: {
   });
 
   // 执行请求（Electron/Capacitor 环境下直接调用，已配置 CORS 代理）
+  // 注意：服务端模板使用 limit 而不是 pageSize
   const json = await executeMethodConfig({
     config,
     vars: {
       keyword,
       page,
+      limit: pageSize,
       pageSize,
     },
     signal,
