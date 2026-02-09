@@ -14,7 +14,12 @@ export function loadAuthFromStorage(): AuthCredentials | null {
     if (!parsed || typeof parsed !== 'object') return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p = parsed as any;
-    if (p.protocol !== 'emby' && p.protocol !== 'navidrome') return null;
+    if (p.protocol !== 'emby' && p.protocol !== 'navidrome' && p.protocol !== 'custom') return null;
+    if (p.protocol === 'custom') {
+      // custom 协议：需要 apiKey
+      if (typeof p.apiKey !== 'string') return null;
+      return p as AuthCredentials;
+    }
     if (typeof p.baseUrl !== 'string') return null;
 
     // 向后兼容：早期版本的 Emby 登录态可能缺少 device/client/version 等字段

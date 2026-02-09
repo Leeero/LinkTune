@@ -1,13 +1,12 @@
-import { PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, Button, Space, Tag, Typography, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { CUSTOM_PLAYLISTS } from '../../app/shell/customPlaylists';
-import { buildCustomAudioUrl, type CustomSong } from '../../protocols/custom/library';
+import { buildCustomAudioUrl, customParseSongs, type CustomPlatform, type CustomSong } from '../../protocols/custom/library';
 import { loadAudioQuality } from '../../config/audioQualityConfig';
-import type { CustomPlaylistSource } from '../../protocols/custom/library';
 import { customGetToplistSongs } from '../../protocols/custom/toplists';
 import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
@@ -32,11 +31,12 @@ export function ToplistSongsPage() {
   const { token } = theme.useToken();
   const auth = useAuth();
   const player = usePlayer();
+  const navigate = useNavigate();
 
   const location = useLocation();
   const { source: rawSource, toplistId: rawToplistId } = useParams();
 
-  const source = typeof rawSource === 'string' ? (rawSource as CustomPlaylistSource) : 'netease';
+  const source = typeof rawSource === 'string' ? (rawSource as CustomPlatform) : 'netease';
   const toplistId = typeof rawToplistId === 'string' ? rawToplistId : '';
 
   const state = isRecord(location.state) ? location.state : null;
@@ -69,9 +69,9 @@ export function ToplistSongsPage() {
   const connectionTitle = useMemo(() => {
     const c = auth.credentials;
     if (!c) return '';
+    if (c.protocol === 'custom') return 'TuneHub';
     try {
       const host = new URL(c.baseUrl).host;
-      if (c.protocol === 'custom') return `自定义 · ${host}`;
       return `${c.protocol.toUpperCase()} · ${host}`;
     } catch {
       return c.protocol.toUpperCase();
@@ -89,7 +89,7 @@ export function ToplistSongsPage() {
     setLoading(true);
     setError(null);
 
-    customGetToplistSongs({ credentials: c, source, toplistId, signal: controller.signal })
+    customGetToplistSongs({ credentials: c, platform: source, toplistId, signal: controller.signal })
       .then((list) => {
         if (!alive) return;
         setSongs(list);
@@ -118,25 +118,50 @@ export function ToplistSongsPage() {
       if (!c || c.protocol !== 'custom') return null;
 
       const quality = loadAudioQuality(c.protocol);
-      const buildUrl = (q: typeof quality) =>
-        buildCustomAudioUrl({
+      const platform = row.platform || source;
+
+      // buildUrl 需要异步调用解析接口
+      const buildUrl = async (q: typeof quality): Promise<string> => {
+        // 如果歌曲本身有 URL，直接返回
+        const syncUrl = buildCustomAudioUrl({
           credentials: c,
           song: row,
-          source,
+          platform,
           quality: q,
         });
-      const url = buildUrl(quality);
+        if (syncUrl) return syncUrl;
+
+        // 否则调用解析接口
+        const parsed = await customParseSongs({
+          credentials: c,
+          platform,
+          ids: row.id,
+          quality: q,
+        });
+        
+        if (parsed.length === 0) {
+          throw new Error('无法获取播放链接');
+        }
+        
+        const result = parsed[0];
+        if (!result.success || !result.url) {
+          throw new Error('无法获取播放链接');
+        }
+        
+        return result.url;
+      };
 
       return {
         id: row.id,
         title: row.name,
         artist: joinArtists(row.artists),
-        url,
+        url: '', // 需要异步获取
         protocol: c.protocol,
         quality,
         buildUrl,
-        source,
+        platform,
         artists: row.artists,
+        coverUrl: row.cover,
       };
     },
     [auth.credentials, source],
@@ -147,7 +172,7 @@ export function ToplistSongsPage() {
       id: row.id,
       name: row.name,
       artists: row.artists,
-      source,
+      platform: row.platform || source,
       addedAt: Date.now(),
     });
     setAddModalOpen(true);
@@ -202,6 +227,11 @@ export function ToplistSongsPage() {
   const sourceLabel = labelForSource(source);
   const pageTitle = toplistName ? `榜单 · ${toplistName}` : `榜单 · ${sourceLabel}`;
 
+  // 返回榜单列表页
+  const handleGoBack = useCallback(() => {
+    navigate(`/toplists/${source}`);
+  }, [navigate, source]);
+
   const handlePlayAll = useCallback(async () => {
     const c = auth.credentials;
     if (!c || c.protocol !== 'custom') return;
@@ -222,20 +252,29 @@ export function ToplistSongsPage() {
   }, [auth.credentials, buildTrack, player, songs]);
 
   if (!auth.credentials || auth.credentials.protocol !== 'custom') {
-    return <Alert type="warning" showIcon message="榜单歌曲页仅支持自定义协议" />;
+    return <Alert type="warning" showIcon message="榜单歌曲页仅支持 TuneHub 协议" />;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'nowrap' }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Typography.Title level={3} ellipsis={{ tooltip: pageTitle }} style={{ marginBottom: 0 }}>
-            {pageTitle}
-          </Typography.Title>
-          <Space size={8} wrap style={{ marginTop: 6 }}>
-            {connectionTitle ? <Tag color="blue">{connectionTitle}</Tag> : null}
-            <Typography.Text type="secondary">已加载 {songs.length.toLocaleString()} 首</Typography.Text>
-          </Space>
+        <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={handleGoBack}
+            title={`返回${sourceLabel}榜单列表`}
+            style={{ flex: '0 0 auto' }}
+          />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <Typography.Title level={3} ellipsis={{ tooltip: pageTitle }} style={{ marginBottom: 0 }}>
+              {pageTitle}
+            </Typography.Title>
+            <Space size={8} wrap style={{ marginTop: 6 }}>
+              {connectionTitle ? <Tag color="blue">{connectionTitle}</Tag> : null}
+              <Typography.Text type="secondary">已加载 {songs.length.toLocaleString()} 首</Typography.Text>
+            </Space>
+          </div>
         </div>
 
         <Button type="primary" style={{ flex: '0 0 auto' }} onClick={handlePlayAll} disabled={songs.length === 0}>

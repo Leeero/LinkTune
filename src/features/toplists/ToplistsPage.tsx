@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { CUSTOM_PLAYLISTS } from '../../app/shell/customPlaylists';
-import type { CustomPlaylistSource } from '../../protocols/custom/library';
+import type { CustomPlatform } from '../../protocols/custom/library';
 import { customGetToplists, type CustomToplist } from '../../protocols/custom/toplists';
 import { useAuth } from '../../session/AuthProvider';
 
@@ -18,7 +18,7 @@ export function ToplistsPage() {
   const navigate = useNavigate();
   const { source: rawSource } = useParams();
 
-  const source = typeof rawSource === 'string' ? (rawSource as CustomPlaylistSource) : 'netease';
+  const source = typeof rawSource === 'string' ? (rawSource as CustomPlatform) : 'netease';
 
   const [items, setItems] = useState<CustomToplist[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,9 +27,9 @@ export function ToplistsPage() {
   const connectionTitle = useMemo(() => {
     const c = auth.credentials;
     if (!c) return '';
+    if (c.protocol === 'custom') return 'TuneHub';
     try {
       const host = new URL(c.baseUrl).host;
-      if (c.protocol === 'custom') return `自定义 · ${host}`;
       return `${c.protocol.toUpperCase()} · ${host}`;
     } catch {
       return c.protocol.toUpperCase();
@@ -46,7 +46,7 @@ export function ToplistsPage() {
     setLoading(true);
     setError(null);
 
-    customGetToplists({ credentials: c, source, signal: controller.signal })
+    customGetToplists({ credentials: c, platform: source, signal: controller.signal })
       .then((list) => {
         if (!alive) return;
         setItems(list);
@@ -70,7 +70,7 @@ export function ToplistsPage() {
   }, [auth.credentials, source]);
 
   if (!auth.credentials || auth.credentials.protocol !== 'custom') {
-    return <Alert type="warning" showIcon message="热门榜单仅支持自定义协议" />;
+    return <Alert type="warning" showIcon message="热门榜单仅支持 TuneHub 协议" />;
   }
 
   const sourceLabel = labelForSource(source);
@@ -101,7 +101,7 @@ export function ToplistsPage() {
                 style={{ borderColor: token.colorBorder, background: token.colorBgContainer }}
                 onClick={() => {
                   navigate(`/toplists/${source}/${it.id}`, {
-                    state: { toplistName: it.name, sourceName: sourceLabel },
+                    state: { toplistName: it.name, sourceName: sourceLabel, platform: source },
                   });
                 }}
               >

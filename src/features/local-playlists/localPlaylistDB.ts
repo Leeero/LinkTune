@@ -9,7 +9,10 @@ export type LocalPlaylistSong = {
   id: string;
   name: string;
   artists?: string[];
-  source: string;
+  /** 平台来源 */
+  platform: string;
+  /** 兼容旧数据 */
+  source?: string;
   /** 添加时间 */
   addedAt: number;
 };
@@ -111,6 +114,13 @@ export async function deleteLocalPlaylist(playlistId: string): Promise<boolean> 
 }
 
 /**
+ * 获取歌曲的平台标识（兼容 platform 和 source 字段）
+ */
+function getSongPlatform(song: LocalPlaylistSong): string {
+  return song.platform || song.source || 'netease';
+}
+
+/**
  * 添加歌曲到歌单
  */
 export async function addSongToPlaylist(playlistId: string, song: LocalPlaylistSong): Promise<boolean> {
@@ -118,12 +128,20 @@ export async function addSongToPlaylist(playlistId: string, song: LocalPlaylistS
   const playlist = await db.get('playlists', playlistId);
   if (!playlist) return false;
 
-  // 去重
-  if (playlist.songs.some((s) => s.id === song.id && s.source === song.source)) {
+  const songPlatform = getSongPlatform(song);
+
+  // 去重：优先用 platform，兼容旧数据的 source
+  if (playlist.songs.some((s) => s.id === song.id && getSongPlatform(s) === songPlatform)) {
     return false;
   }
 
-  playlist.songs.push({ ...song, addedAt: Date.now() });
+  // 存储时同时设置 platform 和 source 以保持兼容性
+  playlist.songs.push({
+    ...song,
+    platform: songPlatform,
+    source: songPlatform,
+    addedAt: Date.now(),
+  });
   playlist.updatedAt = Date.now();
   await db.put('playlists', playlist);
   return true;
@@ -137,14 +155,22 @@ export async function addSongsToPlaylist(playlistId: string, songs: LocalPlaylis
   const playlist = await db.get('playlists', playlistId);
   if (!playlist) return 0;
 
-  const existingIds = new Set(playlist.songs.map((s) => `${s.source}:${s.id}`));
+  // 使用 platform 构建去重 key，兼容旧数据
+  const existingIds = new Set(playlist.songs.map((s) => `${getSongPlatform(s)}:${s.id}`));
   const now = Date.now();
   let addedCount = 0;
 
   for (const song of songs) {
-    const key = `${song.source}:${song.id}`;
+    const songPlatform = getSongPlatform(song);
+    const key = `${songPlatform}:${song.id}`;
     if (!existingIds.has(key)) {
-      playlist.songs.push({ ...song, addedAt: now });
+      // 存储时同时设置 platform 和 source 以保持兼容性
+      playlist.songs.push({
+        ...song,
+        platform: songPlatform,
+        source: songPlatform,
+        addedAt: now,
+      });
       existingIds.add(key);
       addedCount++;
     }
@@ -161,12 +187,13 @@ export async function addSongsToPlaylist(playlistId: string, songs: LocalPlaylis
 /**
  * 从歌单移除歌曲
  */
-export async function removeSongFromPlaylist(playlistId: string, songId: string, source: string): Promise<boolean> {
+export async function removeSongFromPlaylist(playlistId: string, songId: string, platform: string): Promise<boolean> {
   const db = await getDB();
   const playlist = await db.get('playlists', playlistId);
   if (!playlist) return false;
 
-  const songIdx = playlist.songs.findIndex((s) => s.id === songId && s.source === source);
+  // 查找时兼容 platform 和 source
+  const songIdx = playlist.songs.findIndex((s) => s.id === songId && getSongPlatform(s) === platform);
   if (songIdx < 0) return false;
 
   playlist.songs.splice(songIdx, 1);
@@ -187,6 +214,70 @@ export async function clearPlaylistSongs(playlistId: string): Promise<boolean> {
   playlist.updatedAt = Date.now();
   await db.put('playlists', playlist);
   return true;
+}
+
+/**
+ * 批量移除歌曲
+ */
+export async function removeSongsFromPlaylist(
+  playlistId: string,
+  songKeys: Array<{ id: string; platform: string }>,
+): Promise<number> {
+  const db = await getDB();
+  const playlist = await db.get('playlists', playlistId);
+  if (!playlist) return 0;
+
+  const keysToRemove = new Set(songKeys.map((k) => `${k.platform}:${k.id}`));
+  const originalLength = playlist.songs.length;
+
+  playlist.songs = playlist.songs.filter((s) => {
+    const key = `${getSongPlatform(s)}:${s.id}`;
+    return !keysToRemove.has(key);
+  });
+
+  const removedCount = originalLength - playlist.songs.length;
+
+  if (removedCount > 0) {
+    playlist.updatedAt = Date.now();
+    await db.put('playlists', playlist);
+  }
+
+  return removedCount;
+}
+
+/**
+ * 更新歌曲顺序（拖拽排序后调用）
+ */
+export async function reorderPlaylistSongs(playlistId: string, newOrder: LocalPlaylistSong[]): Promise<boolean> {
+  const db = await getDB();
+  const playlist = await db.get('playlists', playlistId);
+  if (!playlist) return false;
+
+  playlist.songs = newOrder;
+  playlist.updatedAt = Date.now();
+  await db.put('playlists', playlist);
+  return true;
+}
+
+/**
+ * 复制歌单
+ */
+export async function duplicateLocalPlaylist(playlistId: string, newName?: string): Promise<LocalPlaylist | null> {
+  const db = await getDB();
+  const original = await db.get('playlists', playlistId);
+  if (!original) return null;
+
+  const now = Date.now();
+  const newPlaylist: LocalPlaylist = {
+    id: `lp_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    name: newName?.trim() || `${original.name} (副本)`,
+    createdAt: now,
+    updatedAt: now,
+    songs: original.songs.map((s) => ({ ...s, addedAt: now })),
+  };
+
+  await db.put('playlists', newPlaylist);
+  return newPlaylist;
 }
 
 /**

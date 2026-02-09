@@ -7,9 +7,10 @@ import { useLocation, useParams } from 'react-router-dom';
 import { getMaxBitrate, loadAudioQuality } from '../../config/audioQualityConfig';
 import {
   buildCustomAudioUrl,
-  customGetPlaylistSongsPage,
+  customParseSongs,
   type CustomSong,
 } from '../../protocols/custom/library';
+import { customSearchSongs } from '../../protocols/custom/search';
 import type { EmbySong } from '../../protocols/emby/types';
 import { buildEmbyAudioUniversalUrl } from '../../protocols/emby/media';
 import { embyGetPlaylistSongsPage, embyGetSongsPage } from '../../protocols/emby/library';
@@ -34,7 +35,7 @@ export function LibraryPage() {
   const playlistId = typeof rawPlaylistId === 'string' ? rawPlaylistId : '';
   const isPlaylistMode = Boolean(playlistId);
 
-  const { customSource, playlistName } = useMemo(() => {
+  const { customPlatform, playlistName } = useMemo(() => {
     return getPlaylistState(location.state, playlistId);
   }, [location.state, playlistId]);
 
@@ -55,7 +56,7 @@ export function LibraryPage() {
     credentials: auth.credentials,
     playlistId,
     isPlaylistMode,
-    customSource,
+    customPlatform,
   });
 
   const [playAllLoading, setPlayAllLoading] = useState(false);
@@ -63,11 +64,11 @@ export function LibraryPage() {
   const connectionTitle = useMemo(() => {
     const c = auth.credentials;
     if (!c) return '';
+    if (c.protocol === 'custom') {
+      return 'TuneHub';
+    }
     try {
       const host = new URL(c.baseUrl).host;
-      if (c.protocol === 'custom') {
-        return `自定义 · ${host}`;
-      }
       return `${c.protocol.toUpperCase()} · ${host}${'serverName' in c && c.serverName ? ` · ${c.serverName}` : ''}`;
     } catch {
       return c.protocol.toUpperCase();
@@ -84,25 +85,52 @@ export function LibraryPage() {
       const artist = joinArtists(row.artists);
 
       if (c.protocol === 'custom') {
-        // 自定义协议
+        // 自定义协议：使用异步解析获取播放 URL
         const customRow = row as CustomSong;
         const quality = loadAudioQuality(c.protocol);
-        const buildUrl = (q: typeof quality) =>
-          buildCustomAudioUrl({
+        const platform = customRow.platform || customPlatform;
+
+        // buildUrl 需要异步调用解析接口
+        const buildUrl = async (q: typeof quality): Promise<string> => {
+          // 如果歌曲本身有 URL，直接返回
+          const syncUrl = buildCustomAudioUrl({
             credentials: c,
             song: customRow,
-            source: customSource,
+            platform,
             quality: q,
           });
-        const url = buildUrl(quality);
+          if (syncUrl) return syncUrl;
+
+          // 否则调用解析接口
+          const parsed = await customParseSongs({
+            credentials: c,
+            platform,
+            ids: customRow.id,
+            quality: q,
+          });
+          
+          if (parsed.length === 0) {
+            throw new Error('无法获取播放链接');
+          }
+          
+          const result = parsed[0];
+          if (!result.success || !result.url) {
+            throw new Error('无法获取播放链接');
+          }
+          
+          return result.url;
+        };
+
         return {
           id: customRow.id,
           title: customRow.name,
           artist,
-          url,
+          url: '', // 需要异步获取
           protocol: c.protocol,
           quality,
           buildUrl,
+          platform,
+          coverUrl: customRow.cover,
         };
       }
 
@@ -128,7 +156,7 @@ export function LibraryPage() {
         buildUrl,
       };
     },
-    [auth.credentials, customSource],
+    [auth.credentials, customPlatform],
   );
 
   const columns: ColumnsType<UnifiedSong> = useMemo(() => {
@@ -228,62 +256,75 @@ export function LibraryPage() {
     await player.playTracks(initialTracks, 0);
 
     // 大列表优化：先用已加载的歌曲启动播放，再在空闲/下一拍逐步补齐剩余队列
-    if (total > songs.length) {
+    if (total > songs.length && c.protocol === 'emby') {
+      // 仅对 Emby 协议进行增量加载，custom 协议基于搜索，已一次性返回
       let startIndex = songs.length;
       const limit = 200;
       while (startIndex < total) {
         try {
-          if (c.protocol === 'custom') {
-            const res = await customGetPlaylistSongsPage({
-              credentials: c,
-              source: customSource,
-              startIndex,
-              limit,
-            });
-
-            const chunkTracks = res.items
-              .map((s) => {
-                const t = buildTrack(s);
-                if (!t) return null;
-                if (seen.has(t.id)) return null;
-                seen.add(t.id);
-                return t;
+          const res = isPlaylistMode
+            ? await embyGetPlaylistSongsPage({
+                credentials: c,
+                playlistId,
+                startIndex,
+                limit,
+                searchTerm: searchTerm || undefined,
               })
-              .filter(Boolean) as Track[];
+            : await embyGetSongsPage({
+                credentials: c,
+                startIndex,
+                limit,
+                searchTerm: searchTerm || undefined,
+              });
 
-            if (chunkTracks.length) player.appendTracks(chunkTracks);
-            if (res.items.length === 0) break;
-            startIndex += res.items.length;
-          } else {
-            const res = isPlaylistMode
-              ? await embyGetPlaylistSongsPage({
-                  credentials: c,
-                  playlistId,
-                  startIndex,
-                  limit,
-                  searchTerm: searchTerm || undefined,
-                })
-              : await embyGetSongsPage({
-                  credentials: c,
-                  startIndex,
-                  limit,
-                  searchTerm: searchTerm || undefined,
-                });
+          const chunkTracks = res.items
+            .map((s) => {
+              const t = buildTrack(s);
+              if (!t) return null;
+              if (seen.has(t.id)) return null;
+              seen.add(t.id);
+              return t;
+            })
+            .filter(Boolean) as Track[];
 
-            const chunkTracks = res.items
-              .map((s) => {
-                const t = buildTrack(s);
-                if (!t) return null;
-                if (seen.has(t.id)) return null;
-                seen.add(t.id);
-                return t;
-              })
-              .filter(Boolean) as Track[];
+          if (chunkTracks.length) player.appendTracks(chunkTracks);
+          if (res.items.length === 0) break;
+          startIndex += res.items.length;
 
-            if (chunkTracks.length) player.appendTracks(chunkTracks);
-            if (res.items.length === 0) break;
-            startIndex += res.items.length;
-          }
+          await new Promise((r) => window.setTimeout(r, 0));
+        } catch {
+          break;
+        }
+      }
+    } else if (total > songs.length && c.protocol === 'custom' && searchTerm) {
+      // Custom 协议：继续搜索加载更多
+      let page = Math.floor(songs.length / 30) + 2; // 从下一页开始
+      const pageSize = 30;
+      let startIndex = songs.length;
+      while (startIndex < total) {
+        try {
+          const res = await customSearchSongs({
+            credentials: c,
+            platform: customPlatform,
+            keyword: searchTerm,
+            page,
+            pageSize,
+          });
+
+          const chunkTracks = res.songs
+            .map((s) => {
+              const t = buildTrack({ ...s, platform: customPlatform });
+              if (!t) return null;
+              if (seen.has(t.id)) return null;
+              seen.add(t.id);
+              return t;
+            })
+            .filter(Boolean) as Track[];
+
+          if (chunkTracks.length) player.appendTracks(chunkTracks);
+          if (res.songs.length === 0) break;
+          startIndex += res.songs.length;
+          page += 1;
 
           await new Promise((r) => window.setTimeout(r, 0));
         } catch {
@@ -293,7 +334,7 @@ export function LibraryPage() {
     }
 
     setPlayAllLoading(false);
-  }, [buildTrack, c, customSource, isPlaylistMode, player, playlistId, searchTerm, songs, total]);
+  }, [buildTrack, c, customPlatform, isPlaylistMode, player, playlistId, searchTerm, songs, total]);
 
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>

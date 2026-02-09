@@ -1,6 +1,7 @@
 import {
   CloudOutlined,
   CustomerServiceOutlined,
+  KeyOutlined,
   LockOutlined,
   LoginOutlined,
   SafetyCertificateOutlined,
@@ -61,11 +62,11 @@ export function LoginMainView(props: Props) {
 
     return (
       <Typography.Text style={{ color: token.colorTextSecondary }}>
-        直接使用服务地址，<b>无需账号密码</b>。可前往{' '}
-        <Typography.Link href="https://api.tunefree.fun/#intro" target="_blank" rel="noopener noreferrer">
-          api.tunefree.fun
+        使用 <b>TuneHub API Key</b> 进行认证，支持网易云、QQ音乐、酷我音乐等多平台。前往{' '}
+        <Typography.Link href="https://tunehub.sayqz.com" target="_blank" rel="noopener noreferrer">
+          tunehub.sayqz.com
         </Typography.Link>{' '}
-        获取可用服务地址。
+        获取 API Key。
       </Typography.Text>
     );
   }, [protocol, token.colorTextSecondary]);
@@ -182,35 +183,57 @@ export function LoginMainView(props: Props) {
                   form={form}
                   layout="vertical"
                   requiredMark="optional"
-                  initialValues={{ username: '', password: '' }}
+                  initialValues={{ username: '', password: '', apiKey: '' }}
                   onFinish={() => void onSubmit()}
                 >
-                  <Form.Item
-                    label="服务器地址"
-                    name="baseUrl"
-                    rules={[
-                      { required: true, message: '请输入服务器地址' },
-                      {
-                        validator: async (_, v) => {
-                          if (!v) return;
-                          try {
-                            // 允许用户不填 scheme；默认补 http://
-                            new URL(/^https?:\/\//i.test(String(v).trim()) ? String(v).trim() : `http://${String(v).trim()}`);
-                          } catch {
-                            throw new Error('地址格式不正确（例如 192.168.1.2:8096 或 https://example.com）');
-                          }
+                  {protocol !== 'custom' && (
+                    <Form.Item
+                      label="服务器地址"
+                      name="baseUrl"
+                      rules={[
+                        { required: true, message: '请输入服务器地址' },
+                        {
+                          validator: async (_, v) => {
+                            if (!v) return;
+                            try {
+                              // 允许用户不填 scheme；默认补 http://
+                              new URL(/^https?:\/\//i.test(String(v).trim()) ? String(v).trim() : `http://${String(v).trim()}`);
+                            } catch {
+                              throw new Error('地址格式不正确（例如 192.168.1.2:8096 或 https://example.com）');
+                            }
+                          },
                         },
-                      },
-                    ]}
-                  >
-                    <Input
-                      prefix={<CloudOutlined />}
-                      placeholder={placeholderBaseUrl}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      inputMode="url"
-                    />
-                  </Form.Item>
+                      ]}
+                    >
+                      <Input
+                        prefix={<CloudOutlined />}
+                        placeholder={placeholderBaseUrl}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        inputMode="url"
+                      />
+                    </Form.Item>
+                  )}
+
+                  {protocol === 'custom' && (
+                    <Form.Item
+                      label="API Key"
+                      name="apiKey"
+                      rules={[{ required: true, message: '请输入 API Key' }]}
+                      extra={
+                        <span style={{ color: token.colorTextTertiary }}>
+                          格式：th_your_api_key_here
+                        </span>
+                      }
+                    >
+                      <Input.Password
+                        prefix={<KeyOutlined />}
+                        placeholder="th_xxxxxxxxxx"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                      />
+                    </Form.Item>
+                  )}
 
                   {protocol !== 'custom' && (
                     <Row gutter={12}>

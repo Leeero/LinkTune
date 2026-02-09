@@ -2,13 +2,6 @@ import type { CustomCredentials } from './types';
 import type { CustomPlatform, CustomSong } from './library';
 import { parseCustomSong } from './library';
 
-export type CustomToplist = {
-  id: string;
-  name: string;
-  updateFrequency?: string;
-  pic?: string;
-};
-
 /**
  * 方法下发 API 返回的配置结构
  */
@@ -44,65 +37,25 @@ function extractList(payload: unknown): unknown[] {
   if (Array.isArray(data)) return data;
 
   if (isRecord(data)) {
-    // 嵌套 data.list
     const list = data.list;
     if (Array.isArray(list)) return list;
 
-    // 酷我榜单格式
-    const musicList = data.musicList;
-    if (Array.isArray(musicList)) return musicList;
+    // 酷我格式
+    const abslist = data.abslist;
+    if (Array.isArray(abslist)) return abslist;
   }
 
   const list = payload.list;
   if (Array.isArray(list)) return list;
 
-  // 网易云榜单格式
+  // 网易云搜索格式
   const result = payload.result;
   if (isRecord(result)) {
-    const tracks = result.tracks;
-    if (Array.isArray(tracks)) return tracks;
-  }
-
-  // 网易云歌单格式
-  const playlist = payload.playlist;
-  if (isRecord(playlist)) {
-    const tracks = playlist.tracks;
-    if (Array.isArray(tracks)) return tracks;
-  }
-
-  // QQ音乐榜单格式: toplist.data.songInfoList
-  const toplist = payload.toplist;
-  if (isRecord(toplist)) {
-    const toplistData = toplist.data;
-    if (isRecord(toplistData)) {
-      const songInfoList = toplistData.songInfoList;
-      if (Array.isArray(songInfoList)) return songInfoList;
-    }
+    const songs = result.songs;
+    if (Array.isArray(songs)) return songs;
   }
 
   return [];
-}
-
-/**
- * 解析榜单数据
- */
-function parseToplist(item: unknown): CustomToplist {
-  if (!isRecord(item)) return { id: '', name: '' };
-
-  const id = String(item.id ?? item.bangid ?? '');
-  const name = String(item.name ?? item.title ?? item.bangName ?? '');
-  const updateFrequency =
-    typeof item.updateFrequency === 'string' ? item.updateFrequency : undefined;
-  const pic =
-    typeof item.pic === 'string'
-      ? item.pic
-      : typeof item.coverImgUrl === 'string'
-        ? item.coverImgUrl
-        : typeof item.pic2 === 'string'
-          ? item.pic2
-          : undefined;
-
-  return { id, name, updateFrequency, pic };
 }
 
 /**
@@ -309,89 +262,57 @@ async function executeMethodConfig(params: {
   return response;
 }
 
+export type SearchResult = {
+  songs: CustomSong[];
+  total: number;
+};
+
 /**
- * 获取榜单列表
+ * 搜索歌曲
  */
-export async function customGetToplists(params: {
+export async function customSearchSongs(params: {
   credentials: CustomCredentials;
   platform: CustomPlatform;
+  keyword: string;
+  page?: number;
+  pageSize?: number;
   signal?: AbortSignal;
-}): Promise<CustomToplist[]> {
-  const { credentials, platform, signal } = params;
+}): Promise<SearchResult> {
+  const { credentials, platform, keyword, page = 1, pageSize = 30, signal } = params;
 
   // 获取方法配置
   const config = await getMethodConfig({
     credentials,
     platform,
-    functionName: 'toplists',
+    functionName: 'search',
     signal,
   });
 
   // 执行请求（Electron/Capacitor 环境下直接调用，已配置 CORS 代理）
-  const json = await executeMethodConfig({ config, signal });
-  const list = extractList(json);
-
-  return list.map(parseToplist).filter((x) => Boolean(x.id && x.name));
-}
-
-/**
- * 获取榜单歌曲
- */
-export async function customGetToplistSongs(params: {
-  credentials: CustomCredentials;
-  platform: CustomPlatform;
-  toplistId: string;
-  signal?: AbortSignal;
-}): Promise<CustomSong[]> {
-  const { credentials, platform, toplistId, signal } = params;
-
-  // 获取方法配置
-  const config = await getMethodConfig({
-    credentials,
-    platform,
-    functionName: 'toplist',
-    signal,
-  });
-
-  // 执行请求
   const json = await executeMethodConfig({
     config,
-    vars: { id: toplistId },
+    vars: {
+      keyword,
+      page,
+      pageSize,
+    },
     signal,
   });
 
   const list = extractList(json);
+  const songs = list.map((item) => parseCustomSong(item, platform)).filter((x) => Boolean(x.id));
 
-  return list.map((item) => parseCustomSong(item, platform)).filter((x) => Boolean(x.id));
-}
+  // 尝试提取总数
+  let total = songs.length;
+  if (isRecord(json)) {
+    if (typeof json.total === 'number') {
+      total = json.total;
+    } else if (isRecord(json.data) && typeof json.data.total === 'number') {
+      total = json.data.total;
+    } else if (isRecord(json.result) && typeof json.result.songCount === 'number') {
+      total = json.result.songCount;
+    }
+  }
 
-/**
- * 获取歌单歌曲
- */
-export async function customGetPlaylistSongs(params: {
-  credentials: CustomCredentials;
-  platform: CustomPlatform;
-  playlistId: string;
-  signal?: AbortSignal;
-}): Promise<CustomSong[]> {
-  const { credentials, platform, playlistId, signal } = params;
-
-  // 获取方法配置
-  const config = await getMethodConfig({
-    credentials,
-    platform,
-    functionName: 'playlist',
-    signal,
-  });
-
-  // 执行请求
-  const json = await executeMethodConfig({
-    config,
-    vars: { id: playlistId },
-    signal,
-  });
-
-  const list = extractList(json);
-
-  return list.map((item) => parseCustomSong(item, platform)).filter((x) => Boolean(x.id));
+  return { songs, total };
 }

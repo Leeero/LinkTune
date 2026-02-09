@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { customGetPlaylistSongsPage, type CustomPlaylistSource } from '../../../protocols/custom/library';
+import { type CustomPlatform, type CustomSong } from '../../../protocols/custom/library';
+import { customSearchSongs } from '../../../protocols/custom/search';
 import { embyGetPlaylistSongsPage, embyGetSongsPage } from '../../../protocols/emby/library';
 import type { EmbySong } from '../../../protocols/emby/types';
 import type { AuthCredentials } from '../../../session/types';
@@ -24,7 +25,7 @@ type UseLibrarySongsParams = {
   credentials: AuthCredentials | null;
   playlistId: string;
   isPlaylistMode: boolean;
-  customSource: CustomPlaylistSource;
+  customPlatform: CustomPlatform;
   batchSize?: number;
 };
 
@@ -54,7 +55,7 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
     credentials,
     playlistId,
     isPlaylistMode,
-    customSource,
+    customPlatform,
     batchSize: inputBatchSize,
   } = params;
 
@@ -190,18 +191,36 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
 
       try {
         if (c.protocol === 'custom') {
-          // 自定义协议：调用 customGetPlaylistSongsPage
-          const res = await customGetPlaylistSongsPage({
+          // 自定义协议：使用搜索接口
+          // 如果没有搜索词，则不加载（需要用户搜索）
+          if (!searchTerm) {
+            setLoadingFirstPage(false);
+            setLoadingMore(false);
+            setHasMore(false);
+            setTotal(0);
+            setSongs([]);
+            return;
+          }
+
+          const page = Math.floor(startIndex / batchSize) + 1;
+          const res = await customSearchSongs({
             credentials: c,
-            source: customSource,
-            startIndex,
-            limit: batchSize,
+            platform: customPlatform,
+            keyword: searchTerm,
+            page,
+            pageSize: batchSize,
             signal: controller.signal,
           });
 
+          // 为每首歌添加 platform 信息
+          const songsWithPlatform: CustomSong[] = res.songs.map((s) => ({
+            ...s,
+            platform: customPlatform,
+          }));
+
           setTotal(res.total);
           setSongs((prev) => {
-            const next = args.reset ? res.items : [...prev, ...res.items];
+            const next = args.reset ? songsWithPlatform : [...prev, ...songsWithPlatform];
             const seen = new Set<string>();
             return next.filter((x) => {
               if (seen.has(x.id)) return false;
@@ -210,7 +229,7 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
             });
           });
 
-          setHasMore(startIndex + res.items.length < res.total);
+          setHasMore(startIndex + res.songs.length < res.total);
         } else {
           // Emby 协议
           const modeKey = isPlaylistMode ? `playlist:${playlistId}` : 'library';
@@ -284,7 +303,7 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
         }
       }
     },
-    [batchSize, credentials, customSource, isPlaylistMode, playlistId, searchTerm],
+    [batchSize, credentials, customPlatform, isPlaylistMode, playlistId, searchTerm],
   );
 
   // 当登录态/搜索条件变化：优先从本地恢复，避免每次切页都重新拉取
@@ -293,9 +312,9 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
 
     const protocol = credentials.protocol;
 
-    // 自定义协议：直接加载
+    // 自定义协议：需要搜索词才加载
     if (protocol === 'custom') {
-      const autoLoadKey = `custom:${customSource}|${credentials.baseUrl}`;
+      const autoLoadKey = `custom:${customPlatform}|${credentials.apiKey}|${searchTerm}`;
       const isSameAutoLoadKey = autoLoadKey === prevAutoLoadKeyRef.current;
       if (isSameAutoLoadKey) {
         const hasAnyData = songsRef.current.length > 0 || totalRef.current > 0;
@@ -410,7 +429,7 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
         restoreTimeoutHandleRef.current = null;
       }
     };
-  }, [credentials, customSource, isPlaylistMode, loadSongsChunk, playlistId, searchTerm, songsPersistKey]);
+  }, [credentials, customPlatform, isPlaylistMode, loadSongsChunk, playlistId, searchTerm, songsPersistKey]);
 
   // 将已加载列表持久化到本地：回到本页时直接复用，不重复请求
   useEffect(() => {

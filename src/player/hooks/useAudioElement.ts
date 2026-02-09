@@ -28,7 +28,7 @@ type Params = {
 
   computeBuffered: () => void;
   skipToNextOnError: () => void;
-  onStallRetry?: (audio: HTMLAudioElement, resumeAt: number) => boolean;
+  onStallRetry?: (audio: HTMLAudioElement, resumeAt: number) => boolean | Promise<boolean>;
 };
 
 export function useAudioElement(params: Params) {
@@ -135,11 +135,13 @@ export function useAudioElement(params: Params) {
       // 如果已经有卡顿定时器，不重复设置
       if (stallTimeoutRef.current) return;
 
-      stallTimeoutRef.current = setTimeout(() => {
+      stallTimeoutRef.current = setTimeout(async () => {
         if (stallRetryRef.current < MAX_STALL_RETRY) {
           stallRetryRef.current += 1;
           const resumeAt = audio.currentTime || 0;
-          if (onStallRetry?.(audio, resumeAt)) return;
+          const retryResult = onStallRetry?.(audio, resumeAt);
+          const handled = retryResult instanceof Promise ? await retryResult : retryResult;
+          if (handled) return;
           console.warn('[Player] 播放卡顿，尝试重试');
           setStatus('loading');
           setErrorMessage('播放卡顿，正在重试');
@@ -166,11 +168,13 @@ export function useAudioElement(params: Params) {
       // stalled 表示浏览器尝试获取数据但数据不可用
       if (stallTimeoutRef.current) return;
 
-      stallTimeoutRef.current = setTimeout(() => {
+      stallTimeoutRef.current = setTimeout(async () => {
         if (stallRetryRef.current < MAX_STALL_RETRY) {
           stallRetryRef.current += 1;
           const resumeAt = audio.currentTime || 0;
-          if (onStallRetry?.(audio, resumeAt)) return;
+          const retryResult = onStallRetry?.(audio, resumeAt);
+          const handled = retryResult instanceof Promise ? await retryResult : retryResult;
+          if (handled) return;
           console.warn('[Player] 数据加载卡顿，尝试重试');
           setStatus('loading');
           setErrorMessage('数据加载卡顿，正在重试');

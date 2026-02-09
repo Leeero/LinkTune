@@ -218,7 +218,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   /** 卡顿时自动降码率并重试 */
   const handleStallRetry = useCallback(
-    (audio: HTMLAudioElement, resumeAt: number) => {
+    async (audio: HTMLAudioElement, resumeAt: number) => {
       const list = fullTracksRef.current;
       const idx = globalIndexRef.current;
       const track = list[idx];
@@ -227,28 +227,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const nextQuality = getLowerAudioQuality(track.protocol, track.quality);
       if (!nextQuality) return false;
 
-      const nextUrl = track.buildUrl(nextQuality);
-      track.quality = nextQuality;
-      track.url = nextUrl;
-      list[idx] = track;
-      updateWindow(idx);
-
-      const label = getAudioQualityLabel(track.protocol, nextQuality);
-      setStatus('loading');
-      setErrorMessage(`网络卡顿，已降码率至 ${label}`);
-
       try {
+        const result = track.buildUrl(nextQuality);
+        const nextUrl = result instanceof Promise ? await result : result;
+        track.quality = nextQuality;
+        track.url = nextUrl;
+        list[idx] = track;
+        updateWindow(idx);
+
+        const label = getAudioQualityLabel(track.protocol, nextQuality);
+        setStatus('loading');
+        setErrorMessage(`网络卡顿，已降码率至 ${label}`);
+
         audio.src = nextUrl;
         audio.load();
         if (resumeAt > 0) {
           audio.currentTime = Math.max(0, resumeAt - 1);
         }
         void audio.play();
-      } catch {
-        // ignore
-      }
 
-      return true;
+        return true;
+      } catch {
+        return false;
+      }
     },
     [updateWindow, setStatus, setErrorMessage],
   );
@@ -303,7 +304,34 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setStatus('loading');
         setErrorMessage(null);
 
-        audio.src = t.url;
+        // 如果 URL 为空且有 buildUrl 函数，需要异步获取 URL
+        let audioUrl = t.url;
+        if (!audioUrl && t.buildUrl && t.quality) {
+          try {
+            const result = t.buildUrl(t.quality);
+            audioUrl = result instanceof Promise ? await result : result;
+            // 更新 track 的 URL
+            t.url = audioUrl;
+            list[idx] = t;
+            updateWindow(idx);
+          } catch (e) {
+            console.error('[Player] 获取播放链接失败:', e);
+            setStatus('error');
+            setErrorMessage(e instanceof Error ? e.message : '获取播放链接失败');
+            skipToNextOnError();
+            return;
+          }
+        }
+
+        if (!audioUrl) {
+          console.error('[Player] 无法获取播放链接');
+          setStatus('error');
+          setErrorMessage('无法获取播放链接');
+          skipToNextOnError();
+          return;
+        }
+
+        audio.src = audioUrl;
         // 保险起见触发一次 load，让加载态更可控
         try {
           audio.load();
@@ -404,6 +432,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const playTracks = async (nextTracks: Track[], startIndex = 0) => {
       if (!nextTracks.length) return;
+      
+      const audio = audioRef.current;
+      
+      // 先停止当前播放
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      
+      // 重置 globalIndexRef 避免旧索引影响切换判断
+      globalIndexRef.current = -1;
       
       // 使用 setTimeout 避免阻塞 UI
       await new Promise<void>((resolve) => {

@@ -6,13 +6,13 @@ import { embyLoginWithPassword } from '../../../protocols/emby/auth';
 import { navidromeLoginSubsonic } from '../../../protocols/navidrome/auth';
 import type { ProtocolId } from '../../../protocols/types';
 import { useAuth } from '../../../session/AuthProvider';
-import { normalizeBaseUrl } from '../utils/normalizeBaseUrl';
 import { getPlaceholderBaseUrl, protocolLabel } from '../utils/protocolMeta';
 
 export type LoginFormValues = {
   baseUrl: string;
   username: string;
   password: string;
+  apiKey: string;
 };
 
 export function useLoginForm() {
@@ -34,7 +34,7 @@ export function useLoginForm() {
         password: String(import.meta.env.VITE_DEV_EMBY_PASSWORD ?? ''),
       },
       custom: {
-        baseUrl: String(import.meta.env.VITE_DEV_CUSTOM_BASE_URL ?? '').trim(),
+        apiKey: String(import.meta.env.VITE_DEV_CUSTOM_API_KEY ?? '').trim(),
       },
     };
   }, []);
@@ -53,7 +53,7 @@ export function useLoginForm() {
 
   useEffect(() => {
     if (!devDefaults) return;
-    const values = form.getFieldsValue(['baseUrl', 'username', 'password']);
+    const values = form.getFieldsValue(['baseUrl', 'username', 'password', 'apiKey']);
 
     if (protocol === 'emby') {
       const updates: Partial<LoginFormValues> = {};
@@ -65,8 +65,8 @@ export function useLoginForm() {
     }
 
     if (protocol === 'custom') {
-      if (!values.baseUrl && devDefaults.custom.baseUrl) {
-        form.setFieldsValue({ baseUrl: devDefaults.custom.baseUrl });
+      if (!values.apiKey && devDefaults.custom.apiKey) {
+        form.setFieldsValue({ apiKey: devDefaults.custom.apiKey });
       }
     }
   }, [devDefaults, form, protocol]);
@@ -94,12 +94,16 @@ export function useLoginForm() {
         return;
       }
 
-      // 自定义协议：只需要 baseUrl
+      // 自定义协议：需要 API Key
+      if (!values.apiKey?.trim()) {
+        throw new Error('请输入 API Key');
+      }
       auth.login({
         protocol: 'custom',
-        baseUrl: normalizeBaseUrl(values.baseUrl),
+        baseUrl: 'https://tunehub.sayqz.com/api',
+        apiKey: values.apiKey.trim(),
       });
-      message.success('已连接自定义服务');
+      message.success('已连接 TuneHub 服务');
       navigate('/library');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '登录失败';

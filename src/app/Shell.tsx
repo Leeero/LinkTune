@@ -50,6 +50,22 @@ export function Shell() {
     void refreshLocalPlaylists();
   }, [location.pathname, refreshLocalPlaylists]);
 
+  // 计算菜单选中的 key
+  // 特殊处理：榜单歌曲详情页 /toplists/:source/:toplistId 应选中 /toplists/:source
+  const selectedKeys = useMemo(() => {
+    const path = location.pathname;
+    
+    // 榜单歌曲详情页：/toplists/qq/123 -> 选中 /toplists/qq
+    const toplistMatch = path.match(/^\/toplists\/([^/]+)\/[^/]+$/);
+    if (toplistMatch) {
+      return [`/toplists/${toplistMatch[1]}`];
+    }
+    
+    // 本地歌单详情页：/local-playlists/xxx -> 选中 /local-playlists/xxx
+    // 默认情况
+    return [path];
+  }, [location.pathname]);
+
   const openKeys = useShellUiStore((s) => s.openKeys);
   const setOpenKeys = useShellUiStore((s) => s.setOpenKeys);
   const ensureOpen = useShellUiStore((s) => s.ensureOpen);
@@ -105,7 +121,7 @@ export function Shell() {
           <Menu
             theme={isDark ? 'dark' : 'light'}
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={selectedKeys}
             openKeys={openKeys}
             onOpenChange={(keys) => setOpenKeys(keys as string[])}
             items={menuItems}

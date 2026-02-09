@@ -19,6 +19,26 @@ import { formatTime } from '../../../player/utils/formatTime';
 import { AddToPlaylistModal } from '../../local-playlists/AddToPlaylistModal';
 import type { LocalPlaylistSong } from '../../local-playlists/localPlaylistDB';
 
+/**
+ * 从 track 中提取纯净的歌曲 ID（去除可能的平台前缀）
+ * Track id 可能是 "netease:123456" 或 "123456" 格式
+ */
+function extractSongId(trackId: string, trackPlatform?: string): string {
+  // 如果 id 包含平台前缀（如 "netease:123456"），提取纯 id
+  const knownPlatforms = ['netease', 'qq', 'kuwo'];
+  for (const p of knownPlatforms) {
+    const prefix = `${p}:`;
+    if (trackId.startsWith(prefix)) {
+      return trackId.slice(prefix.length);
+    }
+  }
+  // 如果有 platform 且 id 以 platform: 开头
+  if (trackPlatform && trackId.startsWith(`${trackPlatform}:`)) {
+    return trackId.slice(trackPlatform.length + 1);
+  }
+  return trackId;
+}
+
 export function NowPlayingControls() {
   const player = usePlayer();
 
@@ -39,11 +59,14 @@ export function NowPlayingControls() {
   const songToAdd: LocalPlaylistSong | null = useMemo(() => {
     const track = player.currentTrack;
     if (!track || track.protocol !== 'custom') return null;
+    const platform = track.platform ?? track.source ?? 'netease';
+    // 提取纯净的歌曲 ID，避免重复添加平台前缀
+    const songId = extractSongId(track.id, platform);
     return {
-      id: track.id,
+      id: songId,
       name: track.title,
       artists: track.artists ?? (track.artist ? [track.artist] : []),
-      source: track.source ?? 'netease',
+      platform,
       addedAt: Date.now(),
     };
   }, [player.currentTrack]);

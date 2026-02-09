@@ -1,4 +1,4 @@
-import type { CustomPlaylistSource } from '../../../protocols/custom/library';
+import type { CustomPlatform } from '../../../protocols/custom/library';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -7,13 +7,13 @@ function isRecord(v: unknown): v is AnyRecord {
 }
 
 export function getPlaylistState(locationState: unknown, playlistId: string): {
-  customSource: CustomPlaylistSource;
+  customPlatform: CustomPlatform;
   playlistName: string;
 } {
   const state = isRecord(locationState) ? locationState : null;
 
-  const customSource = String(state?.source ?? playlistId) as CustomPlaylistSource;
+  const customPlatform = String(state?.platform ?? state?.source ?? playlistId) as CustomPlatform;
   const playlistName = typeof state?.playlistName === 'string' ? state.playlistName : '';
 
-  return { customSource, playlistName };
+  return { customPlatform, playlistName };
 }
