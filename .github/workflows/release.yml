@@ -70,7 +70,7 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           # 不使用 gradle 缓存，因为 android 目录是动态生成的
 

@@ -140,7 +140,7 @@ npm run pack
 
 构建 Android 需要以下环境：
 
-- **Java JDK 17** - [下载 Temurin JDK](https://adoptium.net/)
+- **Java JDK 21** - [下载 Temurin JDK](https://adoptium.net/)
 - **Android Studio** - [下载](https://developer.android.com/studio)
 - **Android SDK** - 通过 Android Studio SDK Manager 安装
 
