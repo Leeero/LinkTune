@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build Android APK
 
 on:
   push:
@@ -6,52 +6,18 @@ on:
       - main
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
 
 jobs:
-  # Electron 桌面端构建
-  build-desktop:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            platform: mac
-          - os: windows-latest
-            platform: win
-          - os: ubuntu-latest
-            platform: linux
-
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and Package
-        run: npm run dist -- --publish never
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-${{ matrix.platform }}
-          path: |
-            release/*.dmg
-            release/*.exe
-            release/*.AppImage
-            release/*.zip
-          if-no-files-found: ignore
-
-  # Android APK 构建
   build-android:
     runs-on: ubuntu-latest
     permissions:
@@ -92,7 +58,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Release APK
+      - name: Build Debug APK
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'debug'
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Build Release APK (unsigned)
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release'
         working-directory: android
         run: ./gradlew assembleRelease
 
@@ -103,40 +75,52 @@ jobs:
       - name: Rename APK files
         run: |
           mkdir -p release-apk
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-debug.apk
+          fi
           if [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-android.apk
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-release-unsigned.apk
           fi
 
-      - name: Upload Android artifact
+      - name: Upload Debug APK artifact
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'debug'
         uses: actions/upload-artifact@v4
         with:
-          name: release-android
+          name: LinkTune-android-debug
           path: release-apk/*.apk
-          if-no-files-found: ignore
+          if-no-files-found: error
 
-  # 发布 Release
+      - name: Upload Release APK artifact
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkTune-android-release
+          path: release-apk/*.apk
+          if-no-files-found: error
+
+  # 当推送 tag 时，将 APK 添加到 Release
   release:
-    needs: [build-desktop, build-android]
+    needs: build-android
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
 
     steps:
-      - name: Download all artifacts
+      - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
+          name: LinkTune-android-release
           path: artifacts
-          merge-multiple: true
 
       - name: List artifacts
-        run: find artifacts -type f | head -50
+        run: ls -la artifacts/
 
-      - name: Create Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          files: artifacts/*.apk
+          generate_release_notes: false
           draft: false
           prerelease: false
         env:

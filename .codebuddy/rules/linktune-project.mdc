@@ -1,0 +1,282 @@
+---
+description: LinkTune 项目开发指南 - 提供项目架构、协议系统、播放器实现、功能模块等完整说明，帮助快速理解和开发此音乐播放器项目。
+alwaysApply: false
+enabled: true
+updatedAt: 2026-03-16T06:55:30.427Z
+provider: 
+---
+
+# LinkTune 项目开发指南
+
+## 概述
+
+LinkTune（联万物音源，听无损好音）是一款多协议音乐播放器，支持连接 Emby、Navidrome 等自建音乐服务器，并通过自定义协议接入第三方音乐平台（网易云、QQ音乐、酷我）。
+
+**技术栈**: React 19 + React Router 7 + Ant Design 5 + Zustand 5 + Vite 6 + Electron 40 + Capacitor 7 + TypeScript 5.7
+
+## 项目结构
+
+```
+src/
+├── app/                 # 应用主组件（App.tsx、Shell.tsx）
+├── config/              # 配置（音质audioQualityConfig、歌词lrcApiConfig）
+├── features/            # 功能模块
+│   ├── history/         # 播放历史（IndexedDB）
+│   ├── library/         # 音乐库（Emby/Navidrome协议）
+│   ├── local-playlists/ # 本地歌单（Custom协议，IndexedDB）
+│   ├── login/           # 登录页
+│   ├── now-playing/     # 正在播放页（全屏歌词）
+│   ├── search/          # 搜索页
+│   ├── settings/        # 设置页
+│   └── toplists/        # 榜单页（Custom协议）
+├── player/              # 播放器核心
+│   ├── components/      # PlayerBar、PlayerQueuePopoverContent
+│   ├── hooks/           # useAudioElement、useElectronTray、useGlobalShortcuts、useLrcCover
+│   ├── utils/           # formatTime、playerSettingsStorage、queueWindow
+│   └── PlayerContext.tsx # 播放器状态上下文（核心）
+├── protocols/           # 协议实现
+│   ├── custom/          # 自定义协议（TuneHub API）
+│   │   ├── library.ts   # 歌曲解析、URL获取
+│   │   ├── search.ts    # 搜索功能
+│   │   ├── toplists.ts  # 榜单功能
+│   │   └── parseCache.ts # 解析结果缓存
+│   ├── emby/            # Emby协议
+│   │   ├── auth.ts      # 认证
+│   │   ├── library.ts   # 音乐库API
+│   │   └── media.ts     # 媒体URL构建
+│   └── navidrome/       # Navidrome/Subsonic协议
+├── session/             # 会话管理
+│   ├── AuthProvider.tsx # 认证上下文
+│   └── storage.ts       # 凭证存储
+├── stores/              # Zustand状态
+│   └── shellUiStore.ts  # Shell UI状态（菜单展开等）
+└── theme/               # 主题（深色/浅色）
+```
+
+## 核心架构
+
+### 应用层级结构
+
+```
+main.tsx
+└── ThemeProvider          # 主题上下文
+    └── AuthProvider       # 认证上下文
+        └── App            # 路由配置
+            ├── LoginPage  # 未登录
+            └── PlayerProvider → Shell → 功能页面  # 已登录
+```
+
+### 三种协议系统
+
+| 协议 | 凭证类型 | 认证方式 | 功能 |
+|------|----------|----------|------|
+| `emby` | EmbyCredentials | API Key / 用户名密码 | 音乐库、歌单 |
+| `navidrome` | NavidromeCredentials | Subsonic Token (md5) | 音乐库 |
+| `custom` | CustomCredentials | API Key | 搜索、榜单、第三方平台 |
+
+**Custom协议「方法下发」机制**：
+1. 前端调用 TuneHub API 获取第三方平台请求配置
+2. 配置包含 URL、参数、headers、transform 等
+3. 前端直接调用第三方平台 API
+4. Electron 主进程配置 CORS 代理解决跨域
+
+**支持的平台**: `netease`（网易云）、`qq`（QQ音乐）、`kuwo`（酷我）
+
+### 播放器系统（PlayerContext）
+
+**核心状态**：
+- `tracks` - 播放队列（虚拟窗口，只保留当前歌曲附近数据）
+- `currentTrack` - 当前歌曲
+- `status` - 状态：idle | loading | ready | error
+- `playbackMode` - 模式：loop | one | shuffle
+- `isPlaying`, `currentTime`, `duration`, `volume`
+
+**Track类型**：
+```typescript
+type Track = {
+  id: string;
+  title: string;
+  artist?: string;
+  url: string;
+  protocol?: 'emby' | 'navidrome' | 'custom';
+  quality?: AudioQuality;
+  buildUrl?: (quality) => string | Promise<string>;  // 动态获取URL
+  platform?: string;  // netease/qq/kuwo（custom协议）
+  artists?: string[];
+};
+```
+
+**重要方法**：
+- `playTrack(track)` - 播放单曲
+- `playTracks(tracks, startIndex)` - 播放列表
+- `appendTracks(tracks)` - 追加到队列
+- `playPrev()` / `playNext()` - 上下曲
+- `toggle()` - 播放/暂停
+- `seek(time)` / `setVolume(v)` - 跳转/音量
+
+### 播放器Hooks
+
+| Hook | 用途 |
+|------|------|
+| `useAudioElement` | 管理HTMLAudioElement事件，处理加载超时、卡顿重试 |
+| `useElectronTray` | 同步播放状态到Electron托盘菜单 |
+| `useGlobalShortcuts` | 全局快捷键（空格暂停、左右切歌等） |
+| `useLrcCover` | 从LrcAPI获取歌曲封面 |
+| `useQueueAutoScroll` | 播放队列弹窗自动滚动到当前歌曲 |
+
+## 路由结构
+
+```
+/                              # 首页（Custom→榜单，其他→音乐库）
+/login                         # 登录页
+/library                       # 音乐库（Emby/Navidrome）
+/search                        # 搜索（多平台）
+/history                       # 播放历史
+/playlists/:playlistId         # Emby歌单详情
+/local-playlists               # 本地歌单列表
+/local-playlists/:playlistId   # 本地歌单详情
+/toplists/:source              # 榜单列表（netease/qq/kuwo）
+/toplists/:source/:toplistId   # 榜单歌曲
+/now-playing                   # 正在播放（全屏歌词）
+/settings                      # 设置
+```
+
+## 数据存储
+
+### LocalStorage
+| Key | 用途 |
+|-----|------|
+| `linktune:auth` | 认证凭证 |
+| `linktune:theme-mode` | 主题（dark/light） |
+| `linktune:lrcapi` | 歌词API配置 |
+| `linktune_audio_quality_v2` | 音质设置（按协议） |
+| `linktune_player_settings` | 播放器设置 |
+
+### IndexedDB
+| 数据库 | Store | 用途 |
+|--------|-------|------|
+| `linktune-history` | `history` | 播放历史（最多500条） |
+| `linktune-local-playlists` | `playlists` | 本地歌单 |
+
+## 音质配置
+
+### Emby/Navidrome
+- `low` (128kbps) → `medium` (192kbps) → `high` (320kbps) → `lossless` (无损)
+
+### Custom
+- `128k` → `320k` → `flac` (~1000kbps) → `flac24bit` (~1400kbps)
+
+网络卡顿时自动降码率重试。
+
+## Electron集成
+
+### 主进程功能（electron/main.cjs）
+1. **CORS代理** - 允许访问QQ音乐、网易云、酷我等API和CDN
+2. **系统托盘** - 显示当前歌曲，支持播放/暂停/上下曲/退出
+3. **全局媒体键** - MediaPlayPause、MediaNextTrack、MediaPreviousTrack、MediaStop
+4. **窗口管理** - 隐藏式标题栏，关闭时最小化到托盘
+
+### 渲染进程API（window.linkTune）
+```typescript
+window.linkTune = {
+  platform: string;                          // 当前平台
+  versions: { node, chrome, electron };
+  updatePlayerState: (state) => void;        // 更新托盘状态
+  onPlayerControl: (callback) => void;       // 监听托盘控制
+  removePlayerControlListener: () => void;
+};
+```
+
+## 开发命令
+
+```bash
+npm run dev           # Electron开发模式（推荐）
+npm run dev:renderer  # 仅Web开发
+npm run build         # 构建生产版本
+npm run dist          # 打包安装程序
+npm run pack          # 仅打包（不生成安装程序）
+npm run lint          # ESLint检查
+npm run format        # Prettier格式化
+```
+
+## 添加新功能指南
+
+### 添加新功能模块
+
+1. 在 `src/features/` 创建新目录
+2. 创建页面组件（如 `NewFeaturePage.tsx`）
+3. 创建子目录：`components/`、`hooks/`（按需）
+4. 在 `src/app/Shell.tsx` 添加路由
+5. 在 `src/app/shell/buildShellMenuItems.ts` 添加菜单项
+
+### 添加新协议
+
+1. 在 `src/protocols/` 创建新目录
+2. 创建 `types.ts` 定义凭证类型
+3. 创建 `auth.ts` 实现认证逻辑
+4. 在 `src/session/types.ts` 扩展 `AuthCredentials` 联合类型
+5. 在 `src/session/storage.ts` 添加协议校验
+6. 在登录页添加协议选项
+
+### 添加新的Custom平台
+
+1. 在 `src/protocols/custom/library.ts` 的 `CustomPlatform` 类型添加新平台
+2. 在 `parseCustomSong` 函数中添加新平台的数据解析逻辑
+3. 后端 TuneHub API 需要配置对应平台的方法
+
+### 使用播放器
+
+```typescript
+import { usePlayer } from '../player/PlayerContext';
+
+function MyComponent() {
+  const player = usePlayer();
+  
+  // 播放单曲
+  await player.playTrack({
+    id: '123',
+    title: '歌曲名',
+    artist: '歌手',
+    url: 'https://...',
+    protocol: 'custom',
+    platform: 'netease',
+  });
+  
+  // 播放列表
+  await player.playTracks(tracks, 0);
+  
+  // 控制
+  player.toggle();      // 播放/暂停
+  player.playNext();    // 下一曲
+  player.seek(30);      // 跳转到30秒
+  player.setVolume(0.8); // 设置音量
+}
+```
+
+### 使用认证
+
+```typescript
+import { useAuth } from '../session/AuthProvider';
+
+function MyComponent() {
+  const auth = useAuth();
+  
+  if (!auth.isAuthenticated) return <Navigate to="/login" />;
+  
+  const { credentials } = auth;
+  // credentials.protocol: 'emby' | 'navidrome' | 'custom'
+  
+  if (credentials.protocol === 'custom') {
+    // 使用 custom 协议功能
+    await customSearchSongs({ credentials, platform: 'netease', keyword: '...' });
+  }
+}
+```
+
+## 注意事项
+
+1. **Custom协议**的搜索/榜单功能需要先从TuneHub获取方法配置，再直接调用第三方API
+2. **播放URL**可能有时效性，Track的`buildUrl`函数支持动态获取
+3. **虚拟窗口**机制：播放列表很长时，只保留当前歌曲附近的数据到state，完整列表在ref中
+4. **连续播放失败**达到5次会自动停止，避免无限循环
+5. **歌词封面**优先使用LrcAPI，其次使用Track自带的coverUrl

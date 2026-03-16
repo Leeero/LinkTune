@@ -21,7 +21,13 @@
     "cap:open:ios": "cap open ios",
     "cap:open:android": "cap open android",
     "cap:run:ios": "cap run ios",
-    "cap:run:android": "cap run android"
+    "cap:run:android": "cap run android",
+    "android:init": "npm run build && cap add android && cap sync android",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:build:debug": "npm run build && cap sync android && cd android && ./gradlew assembleDebug",
+    "android:build:release": "npm run build && cap sync android && cd android && ./gradlew assembleRelease",
+    "android:build:bundle": "npm run build && cap sync android && cd android && ./gradlew bundleRelease"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
