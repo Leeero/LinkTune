@@ -38,7 +38,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # 不使用 gradle 缓存，因为 android 目录是动态生成的
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -55,18 +55,28 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
       - name: Build Debug APK
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'debug'
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Build Release APK (unsigned)
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release'
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Get version from package.json
         id: package-version
