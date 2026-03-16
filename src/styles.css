@@ -6,89 +6,347 @@ body,
 
 body {
   margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Electron macOS: 为隐藏式标题栏添加拖拽区域 */
+/* ====== 全局变量（兼容老代码 + 映射到新 design tokens） ====== */
+:root {
+  --linktune-sidebar-width: var(--lt-sidebar-width, 260px);
+  --linktune-topbar-height: var(--lt-topbar-height, 48px);
+  --linktune-bottomnav-height: var(--lt-bottomnav-height, 56px);
+  --linktune-playerbar-height: var(--lt-playerbar-height, 88px);
+  --linktune-glass-bg-light: rgba(255, 255, 255, 0.72);
+  --linktune-glass-bg-dark: rgba(22, 26, 35, 0.75);
+  --linktune-primary: var(--lt-brand-primary, #4f6eff);
+  --linktune-accent: var(--lt-brand-accent, #a78bfa);
+
+  /* 兼容老变量 → 浅色默认值 */
+  --lt-text: rgba(0, 0, 0, 0.88);
+}
+
+/* 深色模式下覆盖 glass 背景 + 文字色 */
+.linktune-app--dark,
+[data-theme='dark'] {
+  --linktune-glass-bg-light: rgba(22, 26, 35, 0.75);
+  --linktune-glass-bg-dark: rgba(22, 26, 35, 0.92);
+  --lt-text: rgba(255, 255, 255, 0.92);
+}
+
+/* ====== 主容器 ====== */
 .linktune-app {
-  height: 100%;
+  position: relative;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* 侧边栏顶部区域可拖拽 */
-.linktune-sider__header {
-  -webkit-app-region: drag;
-  padding: 36px 16px 16px 16px;
-  text-align: center;
+/* 动态背景 */
+.linktune-app__bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
 }
 
-/* 侧边栏 Logo */
-.linktune-sider__logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
-  margin-bottom: 8px;
-  -webkit-app-region: no-drag;
+.linktune-app__bgGlow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.35;
+  animation: lt-float 25s ease-in-out infinite;
 }
 
-/* 侧边栏内的按钮和交互元素不可拖拽 */
-.linktune-sider__header * {
-  -webkit-app-region: no-drag;
+.linktune-app__bgGlow--1 {
+  width: 500px;
+  height: 500px;
+  top: -15%;
+  left: -5%;
+  background: rgba(79, 110, 255, 0.3);
+  animation-delay: 0s;
 }
 
-/* 右侧内容区顶部拖拽条 */
-.linktune-dragbar {
-  -webkit-app-region: drag;
-  height: 38px;
+.linktune-app__bgGlow--2 {
+  width: 420px;
+  height: 420px;
+  top: 45%;
+  right: -10%;
+  background: rgba(167, 139, 250, 0.25);
+  animation-delay: -8s;
+}
+
+.linktune-app__bgGlow--3 {
+  width: 350px;
+  height: 350px;
+  bottom: -8%;
+  left: 25%;
+  background: rgba(244, 114, 182, 0.2);
+  animation-delay: -16s;
+}
+
+.linktune-app--dark .linktune-app__bgGlow {
+  opacity: 0.2;
+}
+
+/* ====== 侧边栏 (Spotify 风格) ====== */
+.linktune-sidebar {
+  position: relative;
+  z-index: var(--lt-z-sidebar, 200);
+  width: var(--lt-sidebar-width, 260px);
+  height: 100vh;
   flex-shrink: 0;
-}
-
-.linktune-app .ant-layout-sider-children {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  background: var(--lt-bg-glass-heavy);
+  backdrop-filter: var(--lt-blur-xl) saturate(180%);
+  -webkit-backdrop-filter: var(--lt-blur-xl) saturate(180%);
+  border-right: 1px solid var(--lt-border-default);
+  transition: width var(--lt-duration-slow) var(--lt-ease-smooth);
 }
 
-.linktune-sider__menu,
-.linktune-playerbar__queueList,
-.linktune-now__lyrics,
-.linktune-settings,
-.linktune-contentScroll {
+.linktune-sider__header {
+  -webkit-app-region: drag;
+  padding: 20px 20px 12px;
+}
+
+.linktune-sider__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.linktune-sider__logoWrap {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--lt-radius-md);
+  background: var(--lt-brand-gradient);
+  padding: 2px;
+  box-shadow: 0 4px 16px rgba(79, 110, 255, 0.25);
+  transition: box-shadow var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+.linktune-sider__logoWrap:hover {
+  box-shadow: 0 6px 24px rgba(79, 110, 255, 0.35);
+}
+
+.linktune-sider__logo {
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--lt-radius-md) - 2px);
+  object-fit: cover;
+}
+
+.linktune-sider__brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.linktune-sider__title {
+  margin: 0 !important;
+  font-size: 17px !important;
+  font-weight: var(--lt-weight-bold) !important;
+  background: var(--lt-brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.01em;
+}
+
+.linktune-sider__subtitle {
+  font-size: var(--lt-text-xs);
+  color: var(--lt-text-tertiary);
+  letter-spacing: 0.5px;
+}
+
+.linktune-sider__menu {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 8px;
+  padding: 4px 10px 12px;
+}
+
+/* 菜单样式覆盖 — 更紧凑、更圆润 */
+.linktune-sidebar .ant-menu {
+  background: transparent !important;
+  border: none;
+}
+
+.linktune-sidebar .ant-menu-item {
+  border-radius: var(--lt-radius-sm) !important;
+  margin: 2px 0 !important;
+  height: 38px !important;
+  line-height: 38px !important;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+.linktune-sidebar .ant-menu-item:hover {
+  background: var(--lt-fill-hover) !important;
+}
+
+.linktune-sidebar .ant-menu-item-selected {
+  background: var(--lt-fill-selected) !important;
+  font-weight: var(--lt-weight-semibold);
+}
+
+.linktune-sidebar .ant-menu-item-selected::after {
+  display: none;
+}
+
+.linktune-sidebar .ant-menu-submenu-title {
+  border-radius: var(--lt-radius-sm) !important;
+  margin: 2px 0 !important;
+  height: 38px !important;
+  line-height: 38px !important;
+}
+
+.linktune-sidebar .ant-menu-submenu-title:hover {
+  background: var(--lt-fill-hover) !important;
+}
+
+/* ====== 主内容区 ====== */
+.linktune-main {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 顶部栏 */
+.linktune-topbar {
+  display: flex;
+  align-items: center;
+  height: var(--linktune-topbar-height);
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.linktune-topbar__drag {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+/* 内容滚动区 */
+.linktune-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.linktune-content__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 24px 24px;
+}
+
+.linktune-content__fullPage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ====== 移动端顶部品牌栏 ====== */
+.linktune-topbar--mobile {
+  height: auto;
+  min-height: var(--linktune-topbar-height);
+  padding: 8px 16px;
+  gap: 8px;
+}
+
+.linktune-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.linktune-topbar__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.linktune-topbar__brandName {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lt-text, rgba(0, 0, 0, 0.88));
+  letter-spacing: 0.3px;
+}
+
+/* ====== 响应式布局 ====== */
+@media (max-width: 768px) {
+  .linktune-sidebar {
+    display: none;
+  }
+
+  .linktune-content__scroll {
+    padding: 0 16px calc(var(--linktune-bottomnav-height) + 16px);
+  }
+
+  /* 有播放器时的底部间距 */
+  .linktune-content__scroll:has(+ .linktune-playerbar) {
+    padding-bottom: calc(
+      var(--linktune-bottomnav-height) + var(--linktune-playerbar-height) + 16px
+    );
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --linktune-sidebar-width: 220px;
+  }
+
+  .linktune-content__scroll {
+    padding: 0 20px 20px;
+  }
+}
+
+/* ====== 通用滚动条样式 ====== */
+.linktune-sider__menu,
+.linktune-playerbar__queueList,
+.linktune-now__lyrics,
+.linktune-settings,
+.linktune-content__scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 36, 53, 0.25) transparent;
 }
 
 .linktune-sider__menu::-webkit-scrollbar,
-.linktune-sider__playlistScroll::-webkit-scrollbar,
 .linktune-playerbar__queueList::-webkit-scrollbar,
 .linktune-now__lyrics::-webkit-scrollbar,
 .linktune-now__queueList::-webkit-scrollbar,
 .linktune-settings::-webkit-scrollbar,
-.linktune-contentScroll::-webkit-scrollbar {
+.linktune-content__scroll::-webkit-scrollbar {
   width: 6px;
 }
 
 .linktune-sider__menu::-webkit-scrollbar-track,
-.linktune-sider__playlistScroll::-webkit-scrollbar-track,
 .linktune-playerbar__queueList::-webkit-scrollbar-track,
 .linktune-now__lyrics::-webkit-scrollbar-track,
 .linktune-now__queueList::-webkit-scrollbar-track,
 .linktune-settings::-webkit-scrollbar-track,
-.linktune-contentScroll::-webkit-scrollbar-track {
+.linktune-content__scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .linktune-sider__menu::-webkit-scrollbar-thumb,
-.linktune-sider__playlistScroll::-webkit-scrollbar-thumb,
 .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
 .linktune-now__lyrics::-webkit-scrollbar-thumb,
 .linktune-now__queueList::-webkit-scrollbar-thumb,
 .linktune-settings::-webkit-scrollbar-thumb,
-.linktune-contentScroll::-webkit-scrollbar-thumb {
+.linktune-content__scroll::-webkit-scrollbar-thumb {
   background: rgba(24, 36, 53, 0.28);
   border-radius: 999px;
   border: 2px solid transparent;
@@ -96,57 +354,93 @@ body {
 }
 
 .linktune-sider__menu::-webkit-scrollbar-thumb:hover,
-.linktune-sider__playlistScroll::-webkit-scrollbar-thumb:hover,
 .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
 .linktune-now__lyrics::-webkit-scrollbar-thumb:hover,
 .linktune-now__queueList::-webkit-scrollbar-thumb:hover,
 .linktune-settings::-webkit-scrollbar-thumb:hover,
-.linktune-contentScroll::-webkit-scrollbar-thumb:hover {
+.linktune-content__scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(24, 36, 53, 0.4);
   background-clip: content-box;
 }
 
-.ant-layout-sider-dark .linktune-sider__menu,
-.ant-layout-sider-dark .linktune-playerbar__queueList,
-.linktune-app[data-theme='dark'] .linktune-playerbar__queueList,
-.linktune-app[data-theme='dark'] .linktune-now__lyrics,
-.linktune-app[data-theme='dark'] .linktune-now__queueList,
-.linktune-app[data-theme='dark'] .linktune-settings,
-.linktune-app[data-theme='dark'] .linktune-contentScroll {
+.linktune-app--dark .linktune-sider__menu,
+.linktune-app--dark .linktune-playerbar__queueList,
+.linktune-app--dark .linktune-now__lyrics,
+.linktune-app--dark .linktune-now__queueList,
+.linktune-app--dark .linktune-settings,
+.linktune-app--dark .linktune-content__scroll {
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
-.ant-layout-sider-dark .linktune-sider__menu::-webkit-scrollbar-thumb,
-.ant-layout-sider-dark .linktune-sider__playlistScroll::-webkit-scrollbar-thumb,
-.ant-layout-sider-dark .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-now__lyrics::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-now__queueList::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb,
-.linktune-app[data-theme='dark'] .linktune-contentScroll::-webkit-scrollbar-thumb {
+.linktune-app--dark .linktune-sider__menu::-webkit-scrollbar-thumb,
+.linktune-app--dark .linktune-playerbar__queueList::-webkit-scrollbar-thumb,
+.linktune-app--dark .linktune-now__lyrics::-webkit-scrollbar-thumb,
+.linktune-app--dark .linktune-now__queueList::-webkit-scrollbar-thumb,
+.linktune-app--dark .linktune-settings::-webkit-scrollbar-thumb,
+.linktune-app--dark .linktune-content__scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   background-clip: content-box;
 }
 
-.ant-layout-sider-dark .linktune-sider__menu::-webkit-scrollbar-thumb:hover,
-.ant-layout-sider-dark .linktune-sider__playlistScroll::-webkit-scrollbar-thumb:hover,
-.ant-layout-sider-dark .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-now__lyrics::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-now__queueList::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-settings::-webkit-scrollbar-thumb:hover,
-.linktune-app[data-theme='dark'] .linktune-contentScroll::-webkit-scrollbar-thumb:hover {
+.linktune-app--dark .linktune-sider__menu::-webkit-scrollbar-thumb:hover,
+.linktune-app--dark .linktune-playerbar__queueList::-webkit-scrollbar-thumb:hover,
+.linktune-app--dark .linktune-now__lyrics::-webkit-scrollbar-thumb:hover,
+.linktune-app--dark .linktune-now__queueList::-webkit-scrollbar-thumb:hover,
+.linktune-app--dark .linktune-settings::-webkit-scrollbar-thumb:hover,
+.linktune-app--dark .linktune-content__scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.32);
   background-clip: content-box;
 }
 
+/* ====== 播放器底栏 (Apple Music 风格) ====== */
 .linktune-playerbar {
-  height: 84px;
-  padding: 0 16px;
+  height: var(--lt-playerbar-height, 88px);
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   box-sizing: border-box;
+  background: var(--lt-player-bg);
+  backdrop-filter: var(--lt-blur-xl) saturate(180%);
+  -webkit-backdrop-filter: var(--lt-blur-xl) saturate(180%);
+  border-top: 1px solid var(--lt-border-default);
+  position: relative;
+  z-index: var(--lt-z-playerbar, 300);
+  transition: background var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+/* 移动端播放器样式 */
+@media (max-width: 768px) {
+  .linktune-playerbar {
+    position: fixed;
+    bottom: var(--linktune-bottomnav-height);
+    left: 0;
+    right: 0;
+    height: 72px;
+    padding: 0 12px;
+    border-radius: 16px 16px 0 0;
+    margin: 0 8px;
+    width: calc(100% - 16px);
+  }
+
+  .linktune-playerbar__left {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .linktune-playerbar__center {
+    display: none !important;
+  }
+
+  .linktune-playerbar__right {
+    width: auto !important;
+    gap: 0;
+  }
+
+  .linktune-playerbar__right .linktune-playerbar__iconBtn:not(:first-child):not(:nth-child(2)) {
+    display: none;
+  }
 }
 
 .linktune-playerbar__left {
@@ -158,23 +452,34 @@ body {
 }
 
 .linktune-playerbar__cover {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--lt-radius-md);
   border: 0;
   padding: 0;
-  background: var(--lt-cover-placeholder);
+  background: var(--lt-fill-active);
   display: grid;
   place-items: center;
   overflow: hidden;
   flex: 0 0 auto;
   position: relative;
   cursor: pointer;
+  box-shadow: var(--lt-shadow-md);
+  transition:
+    box-shadow var(--lt-duration-normal) var(--lt-ease-default),
+    transform var(--lt-duration-fast) var(--lt-ease-default);
+}
+
+.linktune-playerbar__cover:hover {
+  box-shadow: var(--lt-shadow-lg);
+  transform: scale(1.03);
 }
 
 .linktune-playerbar__cover:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
+  box-shadow: none;
+  transform: none;
 }
 
 .linktune-playerbar__cover img {
@@ -185,8 +490,8 @@ body {
 }
 
 .linktune-playerbar__coverPlaceholder {
-  color: var(--lt-text-secondary);
-  font-size: 18px;
+  color: var(--lt-text-tertiary);
+  font-size: 20px;
 }
 
 .linktune-playerbar__coverHover {
@@ -194,12 +499,13 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.4);
   color: #fff;
   font-size: 18px;
   opacity: 0;
-  transition: opacity 160ms ease;
+  transition: opacity var(--lt-duration-normal) var(--lt-ease-default);
   pointer-events: none;
+  border-radius: var(--lt-radius-md);
 }
 
 .linktune-playerbar__cover:hover .linktune-playerbar__coverHover {
@@ -211,25 +517,26 @@ body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .linktune-playerbar__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--lt-text);
-  line-height: 18px;
+  font-size: var(--lt-text-base, 15px);
+  font-weight: var(--lt-weight-semibold);
+  color: var(--lt-text-primary);
+  line-height: var(--lt-leading-tight);
 }
 
 .linktune-playerbar__artist {
-  font-size: 12px;
+  font-size: var(--lt-text-sm, 13px);
   color: var(--lt-text-secondary);
-  line-height: 16px;
+  line-height: 1.3;
   cursor: pointer;
+  transition: color var(--lt-duration-fast) var(--lt-ease-default);
 }
 
 .linktune-playerbar__artist:hover {
-  color: var(--lt-primary);
+  color: var(--lt-brand-primary);
 }
 
 .linktune-playerbar__center {
@@ -297,29 +604,33 @@ body {
   margin: 0;
 }
 
-/* Slider 样式：已完成/未完成/滑块 */
+/* Slider 样式 — 使用新 Token */
 .linktune-playerbar .ant-slider-rail {
   height: 4px;
-  background: var(--lt-unplayed);
+  background: var(--lt-player-progress-bg);
+  border-radius: var(--lt-radius-full);
 }
 
 .linktune-playerbar .ant-slider-track {
   height: 4px;
-  background: var(--lt-primary);
+  background: var(--lt-player-progress-fill);
+  border-radius: var(--lt-radius-full);
   transition: width 0.1s linear;
 }
 
 .linktune-playerbar .ant-slider-handle::after {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--lt-accent);
-  box-shadow: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--lt-radius-full);
+  background: var(--lt-player-progress-thumb);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.4);
+  transition: all var(--lt-duration-fast) var(--lt-ease-default);
 }
 
 .linktune-playerbar .ant-slider:hover .ant-slider-handle::after {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 2px 12px rgba(167, 139, 250, 0.5);
 }
 
 .linktune-playerbar__right {
@@ -348,21 +659,22 @@ body {
   width: 4px;
 }
 
-/* 图标按钮尺寸（适配右侧 160px 容器） */
+/* 图标按钮尺寸 — 更精致的交互 */
 .linktune-playerbar__iconBtn,
 .linktune-playerbar__modeBtn,
 .linktune-playerbar__controlBtn {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--lt-text-secondary);
+  border-radius: var(--lt-radius-sm);
   transition:
-    transform 120ms ease,
-    color 120ms ease,
-    background-color 120ms ease;
+    transform var(--lt-duration-fast) var(--lt-ease-default),
+    color var(--lt-duration-fast) var(--lt-ease-default),
+    background-color var(--lt-duration-fast) var(--lt-ease-default);
 }
 
 .linktune-playerbar__iconBtn .anticon {
@@ -380,13 +692,14 @@ body {
 .linktune-playerbar__iconBtn:hover,
 .linktune-playerbar__modeBtn:hover,
 .linktune-playerbar__controlBtn:hover {
-  transform: scale(1.05);
-  background-color: var(--lt-hover-bg);
+  transform: scale(1.08);
+  background-color: var(--lt-fill-hover);
+  color: var(--lt-text-primary);
 }
 
 .linktune-playerbar__modeBtn.is-active,
 .linktune-playerbar__iconBtn.is-active {
-  color: var(--lt-primary);
+  color: var(--lt-brand-primary);
 }
 
 .linktune-playerbar__queue {
@@ -515,64 +828,64 @@ body {
   }
 }
 
-@media (max-width: 720px) {
+/* 桌面端中等屏幕适配 */
+@media (min-width: 769px) and (max-width: 1024px) {
   .linktune-playerbar__left {
-    display: none;
+    width: 160px;
   }
   .linktune-playerbar__right {
-    width: 120px;
+    width: 140px;
   }
   .linktune-playerbar__progressRow {
-    grid-template-columns: 44px 1fr 44px;
-  }
-  .linktune-playerbar__progresswrap {
-    min-width: 120px;
+    grid-template-columns: 48px 1fr 48px;
   }
 }
 
+/* ====== 正在播放页 (沉浸式) ====== */
 .linktune-now {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #e8f5e9 0%, #e3f2fd 50%, #fce4ec 100%);
+  background: linear-gradient(160deg, #e8edf5 0%, #dce4f2 40%, #f5e6f0 100%);
   color: var(--np-text);
   overflow: hidden;
 }
 
 .linktune-app[data-theme='dark'] .linktune-now {
-  background: linear-gradient(135deg, #1a2e1a 0%, #1a2633 50%, #2e1a26 100%);
+  background: linear-gradient(160deg, #0d1117 0%, #111827 40%, #1a1025 100%);
 }
 
 .linktune-now__backBtn {
   position: absolute;
   left: 20px;
   top: 20px;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--lt-radius-sm);
   border: 0;
-  background: rgba(255, 255, 255, 0.7);
-  color: #4e5969;
+  background: var(--lt-bg-glass);
+  backdrop-filter: var(--lt-blur-sm);
+  -webkit-backdrop-filter: var(--lt-blur-sm);
+  color: var(--lt-text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
   z-index: 10;
 }
 
 .linktune-app[data-theme='dark'] .linktune-now__backBtn {
-  background: rgba(0, 0, 0, 0.4);
-  color: #c9cdd4;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .linktune-now__backBtn:hover {
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--np-primary);
+  background: var(--lt-bg-glass-heavy);
+  color: var(--lt-brand-primary);
+  transform: scale(1.05);
 }
 
 .linktune-now__main {
@@ -601,10 +914,10 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: linear-gradient(145deg, #f5f5f5 0%, #e0e0e0 100%);
+  background: linear-gradient(145deg, #f0f0f5 0%, #d8d8e0 100%);
   box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.15),
-    inset 0 0 80px rgba(255, 255, 255, 0.5);
+    0 24px 64px rgba(0, 0, 0, 0.12),
+    inset 0 0 60px rgba(255, 255, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -613,10 +926,10 @@ body {
 }
 
 .linktune-app[data-theme='dark'] .linktune-now__disc {
-  background: linear-gradient(145deg, #3a3d45 0%, #25262b 100%);
+  background: linear-gradient(145deg, #2a2d35 0%, #1a1d24 100%);
   box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.4),
-    inset 0 0 80px rgba(255, 255, 255, 0.08);
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    inset 0 0 60px rgba(255, 255, 255, 0.04);
 }
 
 .linktune-now__discInner {
@@ -624,10 +937,11 @@ body {
   height: 100%;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--np-muted);
+  background: var(--lt-fill-active);
   display: grid;
   place-items: center;
-  border: 8px solid rgba(30, 94, 255, 0.3);
+  border: 6px solid rgba(79, 110, 255, 0.25);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
 .linktune-now__discInner img {
@@ -789,12 +1103,13 @@ body {
   justify-content: center;
   align-items: center;
   padding: 16px 24px 24px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
+  background: var(--lt-bg-glass);
+  backdrop-filter: var(--lt-blur-lg) saturate(150%);
+  -webkit-backdrop-filter: var(--lt-blur-lg) saturate(150%);
 }
 
 .linktune-app[data-theme='dark'] .linktune-now__controlArea {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .linktune-now__controlLeft,
@@ -857,19 +1172,19 @@ body {
   width: 56px !important;
   height: 56px;
   font-size: 22px;
-  background: var(--np-primary);
-  border-color: var(--np-primary);
-  box-shadow: 0 4px 16px rgba(30, 94, 255, 0.4);
+  background: var(--lt-brand-primary);
+  border-color: var(--lt-brand-primary);
+  box-shadow: 0 6px 24px rgba(79, 110, 255, 0.35);
   transition:
-    transform 120ms ease,
-    box-shadow 120ms ease;
+    transform var(--lt-duration-fast) var(--lt-ease-spring),
+    box-shadow var(--lt-duration-normal) var(--lt-ease-default);
 }
 
 .linktune-now__playBtn:hover {
-  transform: scale(1.05);
-  background: var(--np-primary-hover) !important;
-  border-color: var(--np-primary-hover) !important;
-  box-shadow: 0 6px 20px rgba(30, 94, 255, 0.5);
+  transform: scale(1.08);
+  background: var(--lt-brand-primary-hover) !important;
+  border-color: var(--lt-brand-primary-hover) !important;
+  box-shadow: 0 8px 32px rgba(79, 110, 255, 0.45);
 }
 
 .linktune-now__likeBtn {
@@ -1088,5 +1403,764 @@ body {
   .linktune-now__controlLeft,
   .linktune-now__controlRight {
     justify-content: center;
+  }
+}
+
+/* ====== 页面通用样式 ====== */
+.linktune-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  animation: lt-fade-in var(--lt-duration-slow) var(--lt-ease-out);
+}
+
+.linktune-page__header {
+  flex-shrink: 0;
+}
+
+.linktune-page__title {
+  margin: 0 !important;
+  font-weight: var(--lt-weight-bold) !important;
+  background: var(--lt-brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.linktune-page__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+/* ====== 桌面端搜索栏 ====== */
+.linktune-searchbar {
+  display: flex;
+  gap: var(--lt-space-md);
+  margin-bottom: var(--lt-space-xl);
+}
+
+.linktune-searchbar__input {
+  flex: 1;
+  height: 44px;
+  padding: 0 16px 0 44px;
+  font-size: var(--lt-text-base);
+  border: 1px solid var(--lt-border-default);
+  border-radius: var(--lt-radius-md);
+  outline: none;
+  background: var(--lt-bg-elevated);
+  color: var(--lt-text-primary);
+  transition:
+    border-color var(--lt-duration-normal) var(--lt-ease-default),
+    box-shadow var(--lt-duration-normal) var(--lt-ease-default);
+  background-repeat: no-repeat;
+  background-position: 12px center;
+  background-size: 20px;
+}
+
+.linktune-searchbar__input:focus {
+  border-color: var(--lt-brand-primary);
+  box-shadow: 0 0 0 3px rgba(79, 110, 255, 0.12);
+}
+
+.linktune-searchbar__input::placeholder {
+  color: var(--lt-text-tertiary);
+}
+
+.linktune-searchbar__btn {
+  border-radius: var(--lt-radius-md) !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+/* ====== 桌面端平台选择器 ====== */
+.linktune-platforms {
+  display: flex;
+  gap: var(--lt-space-md);
+  flex-wrap: wrap;
+}
+
+.linktune-platforms__item {
+  flex: 1 1 100px;
+  min-width: 100px;
+  padding: 14px 16px;
+  border-radius: var(--lt-radius-md);
+  border: 1px solid var(--lt-border-default);
+  background: var(--lt-bg-elevated);
+  cursor: pointer;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.linktune-platforms__item:hover {
+  border-color: var(--lt-border-hover);
+  background: var(--lt-fill-hover);
+  transform: translateY(-1px);
+}
+
+.linktune-platforms__item.is-active {
+  border-color: transparent;
+  box-shadow: var(--lt-shadow-md);
+  transform: translateY(-2px);
+}
+
+.linktune-platforms__icon {
+  font-size: 20px;
+}
+
+.linktune-platforms__name {
+  font-weight: var(--lt-weight-semibold);
+  color: var(--lt-text-primary);
+  font-size: 14px;
+}
+
+.linktune-platforms__item.is-active .linktune-platforms__name {
+  color: #fff;
+}
+
+/* ====== 桌面端歌曲列表 ====== */
+.linktune-songlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.linktune-songlist__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--lt-space-xl) 0 var(--lt-space-md);
+}
+
+.linktune-songlist__toolbar-btn {
+  border-radius: var(--lt-radius-sm) !important;
+}
+
+/* 单首歌曲行 */
+.linktune-song-row {
+  display: flex;
+  align-items: center;
+  gap: var(--lt-space-md);
+  padding: 8px 12px;
+  border-radius: var(--lt-radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--lt-duration-fast) var(--lt-ease-default),
+    transform var(--lt-duration-fast) var(--lt-ease-default);
+  position: relative;
+}
+
+.linktune-song-row:hover {
+  background: var(--lt-fill-hover);
+}
+
+.linktune-song-row:active {
+  transform: scale(0.995);
+}
+
+.linktune-song-row.is-playing {
+  background: var(--lt-fill-selected);
+}
+
+.linktune-song-row.is-playing:hover {
+  background: var(--lt-fill-selected-hover);
+}
+
+/* 播放按钮 — 默认隐藏，hover 时显示 */
+.linktune-song-row__play {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--lt-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--lt-radius-full);
+  transition: all var(--lt-duration-fast) var(--lt-ease-default);
+  flex-shrink: 0;
+}
+
+.linktune-song-row__play:hover {
+  background: var(--lt-brand-primary);
+  color: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(79, 110, 255, 0.3);
+}
+
+.linktune-song-row.is-playing .linktune-song-row__play {
+  color: var(--lt-brand-primary);
+}
+
+/* 封面 */
+.linktune-song-row__cover {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--lt-radius-xs);
+  overflow: hidden;
+  background: var(--lt-brand-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--lt-shadow-sm);
+  transition: box-shadow var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+.linktune-song-row:hover .linktune-song-row__cover {
+  box-shadow: var(--lt-shadow-md);
+}
+
+.linktune-song-row__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.linktune-song-row__cover-placeholder {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 信息区 */
+.linktune-song-row__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.linktune-song-row__title {
+  font-size: var(--lt-text-base);
+  font-weight: var(--lt-weight-semibold);
+  color: var(--lt-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: var(--lt-leading-tight);
+  transition: color var(--lt-duration-fast) var(--lt-ease-default);
+}
+
+.linktune-song-row.is-playing .linktune-song-row__title {
+  color: var(--lt-brand-primary);
+}
+
+.linktune-song-row__artist {
+  font-size: var(--lt-text-sm);
+  color: var(--lt-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.linktune-song-row__artist:hover {
+  color: var(--lt-text-primary);
+}
+
+/* 附加列（专辑、时长等） */
+.linktune-song-row__extra {
+  font-size: var(--lt-text-sm);
+  color: var(--lt-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.linktune-song-row__extra--album {
+  width: 180px;
+}
+
+.linktune-song-row__extra--duration {
+  width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.linktune-song-row__extra--time {
+  width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.linktune-song-row__extra--count {
+  width: 60px;
+  text-align: right;
+}
+
+/* 操作按钮区 */
+.linktune-song-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--lt-duration-fast) var(--lt-ease-default);
+}
+
+.linktune-song-row:hover .linktune-song-row__actions {
+  opacity: 1;
+}
+
+.linktune-song-row__action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--lt-text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--lt-radius-full);
+  transition: all var(--lt-duration-fast) var(--lt-ease-default);
+}
+
+.linktune-song-row__action-btn:hover {
+  background: var(--lt-fill-active);
+  color: var(--lt-text-primary);
+  transform: scale(1.1);
+}
+
+.linktune-song-row__action-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--lt-color-error);
+}
+
+/* 列表头（桌面端） */
+.linktune-songlist__header {
+  display: flex;
+  align-items: center;
+  gap: var(--lt-space-md);
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--lt-border-default);
+  margin-bottom: var(--lt-space-sm);
+}
+
+.linktune-songlist__header-col {
+  font-size: var(--lt-text-xs);
+  font-weight: var(--lt-weight-semibold);
+  color: var(--lt-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.linktune-songlist__header-col--play {
+  width: 32px;
+  flex-shrink: 0;
+}
+.linktune-songlist__header-col--cover {
+  width: 40px;
+  flex-shrink: 0;
+}
+.linktune-songlist__header-col--info {
+  flex: 1;
+  min-width: 0;
+}
+.linktune-songlist__header-col--album {
+  width: 180px;
+  flex-shrink: 0;
+}
+.linktune-songlist__header-col--duration {
+  width: 60px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.linktune-songlist__header-col--time {
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.linktune-songlist__header-col--count {
+  width: 60px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.linktune-songlist__header-col--actions {
+  width: 68px;
+  flex-shrink: 0;
+}
+
+/* 滚动歌曲列表容器（有虚拟滚动感） */
+.linktune-songlist__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ====== 桌面端空状态 ====== */
+.linktune-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: var(--lt-space-md);
+}
+
+.linktune-empty__icon {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+.linktune-empty__title {
+  font-size: var(--lt-text-lg);
+  font-weight: var(--lt-weight-semibold);
+  color: var(--lt-text-primary);
+  margin: 0;
+}
+
+.linktune-empty__desc {
+  font-size: var(--lt-text-sm);
+  color: var(--lt-text-secondary);
+  margin: 0;
+}
+
+/* ====== 桌面端加载状态 ====== */
+.linktune-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+/* ====== 设置页面 ====== */
+.linktune-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+
+.linktune-settings__rowLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ====== 热门榜单页面 ====== */
+.linktune-toplists__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--lt-space-lg);
+}
+
+.linktune-toplists__card {
+  border-radius: var(--lt-radius-lg) !important;
+  cursor: pointer;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+  overflow: hidden;
+}
+
+.linktune-toplists__card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--lt-shadow-lg);
+}
+
+/* ====== 本地歌单页面 ====== */
+.linktune-playlists__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--lt-space-lg);
+}
+
+.linktune-playlists__card {
+  border-radius: var(--lt-radius-lg) !important;
+  cursor: pointer;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+  overflow: hidden;
+}
+
+.linktune-playlists__card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--lt-shadow-lg);
+}
+
+.linktune-playlists__cardCover {
+  width: 100%;
+  height: 120px;
+  background: var(--lt-brand-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ====== 移动端适配 ====== */
+@media (max-width: 768px) {
+  .linktune-page__title {
+    font-size: 24px !important;
+  }
+
+  .linktune-toplists__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .linktune-playlists__grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+/* ====== 全局微交互增强 ====== */
+
+/* Ant Design 主按钮增强 */
+.linktune-page .ant-btn-primary {
+  border-radius: var(--lt-radius-sm) !important;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+  box-shadow: 0 2px 8px rgba(79, 110, 255, 0.25);
+}
+
+.linktune-page .ant-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(79, 110, 255, 0.35);
+}
+
+.linktune-page .ant-btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 4px rgba(79, 110, 255, 0.2);
+}
+
+/* 文本按钮增强 hover */
+.linktune-page .ant-btn-text:hover {
+  border-radius: var(--lt-radius-sm);
+}
+
+/* Ant Design 卡片增强 */
+.linktune-page .ant-card {
+  border-radius: var(--lt-radius-lg) !important;
+  border-color: var(--lt-border-default) !important;
+  transition: all var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+.linktune-page .ant-card-hoverable:hover {
+  border-color: var(--lt-border-hover) !important;
+  box-shadow: var(--lt-shadow-lg);
+  transform: translateY(-4px);
+}
+
+/* Ant Design Tag 增强 */
+.linktune-page .ant-tag {
+  border-radius: var(--lt-radius-sm) !important;
+  border: none;
+  font-weight: var(--lt-weight-medium);
+}
+
+/* Ant Design Alert 增强 */
+.linktune-page .ant-alert {
+  border-radius: var(--lt-radius-md) !important;
+}
+
+/* 歌曲列表项交错入场动画 */
+.linktune-songlist .linktune-song-row {
+  animation: lt-fade-in var(--lt-duration-slow) var(--lt-ease-out) both;
+}
+
+.linktune-songlist .linktune-song-row:nth-child(1) {
+  animation-delay: 0ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(2) {
+  animation-delay: 20ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(3) {
+  animation-delay: 40ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(4) {
+  animation-delay: 60ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(5) {
+  animation-delay: 80ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(6) {
+  animation-delay: 100ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(7) {
+  animation-delay: 120ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(8) {
+  animation-delay: 140ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(9) {
+  animation-delay: 160ms;
+}
+.linktune-songlist .linktune-song-row:nth-child(10) {
+  animation-delay: 180ms;
+}
+
+/* 移动端页面入场动画 */
+.mobile-page {
+  animation: lt-fade-in var(--lt-duration-slow) var(--lt-ease-out);
+}
+
+/* 移动端卡片网格交错入场 */
+.mobile-card-grid .mobile-card {
+  animation: lt-scale-in var(--lt-duration-slow) var(--lt-ease-out) both;
+}
+
+.mobile-card-grid .mobile-card:nth-child(1) {
+  animation-delay: 0ms;
+}
+.mobile-card-grid .mobile-card:nth-child(2) {
+  animation-delay: 50ms;
+}
+.mobile-card-grid .mobile-card:nth-child(3) {
+  animation-delay: 100ms;
+}
+.mobile-card-grid .mobile-card:nth-child(4) {
+  animation-delay: 150ms;
+}
+.mobile-card-grid .mobile-card:nth-child(5) {
+  animation-delay: 200ms;
+}
+.mobile-card-grid .mobile-card:nth-child(6) {
+  animation-delay: 250ms;
+}
+
+/* 桌面端榜单卡片交错入场 */
+.linktune-toplists .ant-list-item {
+  animation: lt-fade-in var(--lt-duration-slow) var(--lt-ease-out) both;
+}
+
+.linktune-toplists .ant-list-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.linktune-toplists .ant-list-item:nth-child(2) {
+  animation-delay: 60ms;
+}
+.linktune-toplists .ant-list-item:nth-child(3) {
+  animation-delay: 120ms;
+}
+.linktune-toplists .ant-list-item:nth-child(4) {
+  animation-delay: 180ms;
+}
+.linktune-toplists .ant-list-item:nth-child(5) {
+  animation-delay: 240ms;
+}
+.linktune-toplists .ant-list-item:nth-child(6) {
+  animation-delay: 300ms;
+}
+
+/* 桌面端歌单卡片交错入场 */
+.linktune-playlists__grid .linktune-playlists__card {
+  animation: lt-scale-in var(--lt-duration-slow) var(--lt-ease-out) both;
+}
+
+.linktune-playlists__grid .linktune-playlists__card:nth-child(1) {
+  animation-delay: 0ms;
+}
+.linktune-playlists__grid .linktune-playlists__card:nth-child(2) {
+  animation-delay: 60ms;
+}
+.linktune-playlists__grid .linktune-playlists__card:nth-child(3) {
+  animation-delay: 120ms;
+}
+.linktune-playlists__grid .linktune-playlists__card:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+/* 移动端歌曲列表交错入场 */
+.mobile-song-list .mobile-song-item {
+  animation: lt-stagger-in var(--lt-duration-normal) var(--lt-ease-out) both;
+}
+
+.mobile-song-list .mobile-song-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(2) {
+  animation-delay: 20ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(3) {
+  animation-delay: 40ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(4) {
+  animation-delay: 60ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(5) {
+  animation-delay: 80ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(6) {
+  animation-delay: 100ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(7) {
+  animation-delay: 120ms;
+}
+.mobile-song-list .mobile-song-item:nth-child(8) {
+  animation-delay: 140ms;
+}
+
+/* 移动端歌单列表入场 */
+.mobile-playlist-list .mobile-playlist-item {
+  animation: lt-fade-in var(--lt-duration-slow) var(--lt-ease-out) both;
+}
+
+.mobile-playlist-list .mobile-playlist-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.mobile-playlist-list .mobile-playlist-item:nth-child(2) {
+  animation-delay: 50ms;
+}
+.mobile-playlist-list .mobile-playlist-item:nth-child(3) {
+  animation-delay: 100ms;
+}
+.mobile-playlist-list .mobile-playlist-item:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+/* 搜索按钮加载动画增强 */
+.linktune-searchbar .ant-btn-loading {
+  opacity: 0.8;
+}
+
+/* 平台选择器切换动画 */
+.linktune-platforms__item {
+  animation: lt-fade-in var(--lt-duration-normal) var(--lt-ease-out) both;
+}
+
+.linktune-platforms__item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.linktune-platforms__item:nth-child(2) {
+  animation-delay: 40ms;
+}
+.linktune-platforms__item:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+/* 全局过渡 — 深色/浅色切换 */
+.linktune-app {
+  transition: background-color var(--lt-duration-slow) var(--lt-ease-default);
+}
+
+/* Ant Design Modal 增强 */
+.ant-modal .ant-modal-content {
+  border-radius: var(--lt-radius-lg) !important;
+}
+
+.ant-modal .ant-modal-header {
+  border-radius: var(--lt-radius-lg) var(--lt-radius-lg) 0 0 !important;
+}
+
+/* ====== 减少动画偏好（桌面端） ====== */
+@media (prefers-reduced-motion: reduce) {
+  .linktune-page,
+  .mobile-page,
+  .linktune-songlist .linktune-song-row,
+  .mobile-card-grid .mobile-card,
+  .mobile-song-list .mobile-song-item,
+  .mobile-playlist-list .mobile-playlist-item,
+  .linktune-toplists .ant-list-item,
+  .linktune-playlists__grid .linktune-playlists__card,
+  .linktune-platforms__item {
+    animation: none !important;
   }
 }

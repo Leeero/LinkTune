@@ -1,7 +1,8 @@
-import { PlayCircleOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Space, Typography, theme } from 'antd';
+import { CaretRightFilled, EllipsisOutlined, PlayCircleOutlined, PlusOutlined, SearchOutlined, CloseCircleFilled } from '@ant-design/icons';
+import { Alert, Button, Card, Dropdown, Space, Typography, message, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useMemo, useState } from 'react';
+import type { MenuProps } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { getMaxBitrate, loadAudioQuality } from '../../config/audioQualityConfig';
@@ -17,6 +18,9 @@ import { embyGetPlaylistSongsPage, embyGetSongsPage } from '../../protocols/emby
 import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
 import { useAuth } from '../../session/AuthProvider';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { AddToPlaylistModal } from '../local-playlists/AddToPlaylistModal';
+import type { LocalPlaylistSong } from '../local-playlists/localPlaylistDB';
 
 import { LibraryHeader } from './components/LibraryHeader';
 import { SongsTable } from './components/SongsTable';
@@ -31,9 +35,15 @@ export function LibraryPage() {
   const player = usePlayer();
   const location = useLocation();
   const { playlistId: rawPlaylistId } = useParams();
+  const isMobile = useIsMobile();
+  const mobileListRef = useRef<HTMLDivElement>(null);
 
   const playlistId = typeof rawPlaylistId === 'string' ? rawPlaylistId : '';
   const isPlaylistMode = Boolean(playlistId);
+
+  // 添加到歌单弹窗状态
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [songToAdd, setSongToAdd] = useState<LocalPlaylistSong | null>(null);
 
   const { customPlatform, playlistName } = useMemo(() => {
     return getPlaylistState(location.state, playlistId);
@@ -49,9 +59,12 @@ export function LibraryPage() {
     songs,
     total,
     loadingFirstPage,
+    loadingMore,
+    hasMore,
     error,
     tableWrapRef,
     tableBodyY,
+    loadSongsChunk,
   } = useLibrarySongs({
     credentials: auth.credentials,
     playlistId,
@@ -336,6 +349,245 @@ export function LibraryPage() {
     setPlayAllLoading(false);
   }, [buildTrack, c, customPlatform, isPlaylistMode, player, playlistId, searchTerm, songs, total]);
 
+  // 添加到歌单
+  const handleAddToPlaylist = useCallback(
+    (row: UnifiedSong) => {
+      const songPlatform = 'platform' in row ? (row as CustomSong).platform : undefined;
+      setSongToAdd({
+        id: row.id,
+        name: row.name,
+        artists: row.artists,
+        platform: songPlatform || customPlatform,
+        addedAt: Date.now(),
+      });
+      setAddModalOpen(true);
+    },
+    [customPlatform],
+  );
+
+  // 移动端歌曲更多菜单
+  const getSongMenu = useCallback(
+    (song: UnifiedSong): MenuProps => ({
+      items: [
+        { key: 'add', label: '添加到歌单', icon: <PlusOutlined /> },
+        { key: 'next', label: '下一首播放' },
+      ],
+      onClick: ({ key }: { key: string }) => {
+        if (key === 'add') {
+          handleAddToPlaylist(song);
+        } else {
+          message.info(`${key}（功能占位）`);
+        }
+      },
+    }),
+    [handleAddToPlaylist],
+  );
+
+  // 移动端滚动加载更多
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = mobileListRef.current;
+    if (!el) return;
+
+    // 实际滚动容器是 .linktune-content__scroll，而非 window
+    const scrollContainer = el.closest('.linktune-content__scroll') as HTMLElement | null;
+    if (!scrollContainer) return;
+
+    const onScroll = () => {
+      if (!isEmby && !isCustom) return;
+      if (loadingFirstPage || loadingMore) return;
+      if (!hasMore) return;
+
+      const threshold = 300;
+      const distanceToBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight;
+      if (distanceToBottom < threshold) {
+        void loadSongsChunk({ reset: false });
+      }
+    };
+
+    scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', onScroll);
+  }, [isMobile, isEmby, isCustom, loadingFirstPage, loadingMore, hasMore, loadSongsChunk]);
+
+  // 移动端布局
+  if (isMobile) {
+    const getDuration = (row: UnifiedSong) => {
+      if (isCustom) {
+        return formatDurationFromSeconds((row as CustomSong).duration);
+      }
+      return formatDurationFromTicks((row as EmbySong).runTimeTicks);
+    };
+
+    return (
+      <div className="mobile-page">
+        {/* 页面标题 */}
+        <div className="mobile-page__header">
+          <h1 className="mobile-page__title">{pageTitle}</h1>
+          {connectionTitle && (
+            <p className="mobile-page__subtitle">{connectionTitle}</p>
+          )}
+        </div>
+
+        {/* Navidrome 提示 */}
+        {c?.protocol === 'navidrome' && (
+          <Alert
+            type="info"
+            showIcon
+            message="当前仅完善了 Emby 的歌曲列表"
+            description="Navidrome 的歌曲列表接口后续再接入。"
+            style={{ borderRadius: 12, marginBottom: 16 }}
+          />
+        )}
+
+        {/* 搜索栏（仅 Emby） */}
+        {!isCustom && (
+          <div className="mobile-search-bar">
+            <SearchOutlined className="mobile-search-bar__icon" />
+            <input
+              type="search"
+              className="mobile-search-bar__input"
+              placeholder={isPlaylistMode ? '搜索歌单内歌曲...' : '搜索歌曲 / 歌手 / 专辑'}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitSearch();
+              }}
+              enterKeyHint="search"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                className="mobile-search-bar__clear"
+                onClick={() => setSearchInput('')}
+              >
+                <CloseCircleFilled />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 错误提示 */}
+        {error && <Alert type="error" showIcon message={error} style={{ borderRadius: 12, marginBottom: 16 }} />}
+
+        {/* 列表工具栏 */}
+        {(isEmby || isCustom) && songs.length > 0 && (
+          <div className="mobile-list-toolbar">
+            <span className="mobile-list-toolbar__info">
+              已加载 {songs.length.toLocaleString()} / {total.toLocaleString()} 首
+            </span>
+            <div className="mobile-list-toolbar__actions">
+              <button
+                type="button"
+                className="mobile-list-toolbar__btn mobile-list-toolbar__btn--primary"
+                onClick={() => void handlePlayAll()}
+                disabled={playAllLoading}
+              >
+                <CaretRightFilled /> {playAllLoading ? '加载中...' : '播放全部'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 加载中 */}
+        {loadingFirstPage ? (
+          <div className="mobile-loading">
+            <div className="mobile-loading__spinner" />
+          </div>
+        ) : songs.length === 0 && !error ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">🎵</div>
+            <h3 className="mobile-empty__title">暂无歌曲</h3>
+            <p className="mobile-empty__desc">
+              {isCustom ? '请先搜索歌曲' : '加载歌曲中...'}
+            </p>
+          </div>
+        ) : (
+          /* 歌曲列表 */
+          <div className="mobile-song-list" ref={mobileListRef}>
+            {songs.map((song, index) => {
+              const isCurrent = player.currentTrack?.id === song.id;
+              const artist = joinArtists(song.artists);
+              const cover = 'cover' in song ? (song as CustomSong).cover : undefined;
+              const duration = getDuration(song);
+
+              return (
+                <button
+                  key={song.id}
+                  type="button"
+                  className={`mobile-song-item ${isCurrent ? 'is-playing' : ''}`}
+                  onClick={async () => {
+                    const t = buildTrack(song);
+                    if (t) await player.playTrack(t);
+                  }}
+                >
+                  {/* 序号 / 播放动画 */}
+                  {isCurrent ? (
+                    <div className="mobile-song-item__playing-indicator">
+                      <span /><span /><span />
+                    </div>
+                  ) : (
+                    <span className="mobile-song-item__index">{index + 1}</span>
+                  )}
+
+                  {/* 封面（Custom协议有封面时显示） */}
+                  {cover && (
+                    <div className="mobile-song-item__cover">
+                      <img src={cover} alt={song.name} />
+                    </div>
+                  )}
+
+                  {/* 信息 */}
+                  <div className="mobile-song-item__info">
+                    <p className="mobile-song-item__title">{song.name}</p>
+                    <div className="mobile-song-item__meta">
+                      <p className="mobile-song-item__artist">
+                        {artist}
+                        {duration !== '--:--' ? ` · ${duration}` : ''}
+                        {'album' in song && song.album ? ` · ${song.album}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 更多按钮 */}
+                  <Dropdown menu={getSongMenu(song)} trigger={['click']} placement="bottomRight">
+                    <div
+                      className="mobile-song-item__action"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <EllipsisOutlined />
+                    </div>
+                  </Dropdown>
+                </button>
+              );
+            })}
+
+            {/* 加载更多指示器 */}
+            {loadingMore && (
+              <div style={{ padding: '16px 0', display: 'flex', justifyContent: 'center' }}>
+                <div className="mobile-loading__spinner" />
+              </div>
+            )}
+            {!hasMore && songs.length > 0 && (
+              <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 13, color: 'var(--lt-text-secondary, rgba(255,255,255,0.4))' }}>
+                已加载全部 {total.toLocaleString()} 首
+              </div>
+            )}
+          </div>
+        )}
+
+        <AddToPlaylistModal
+          open={addModalOpen}
+          onClose={() => {
+            setAddModalOpen(false);
+            setSongToAdd(null);
+          }}
+          song={songToAdd}
+        />
+      </div>
+    );
+  }
+
+  // 桌面端布局
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Card

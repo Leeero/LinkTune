@@ -177,8 +177,6 @@ export function PlayerBar() {
         (isError ? ' linktune-playerbar--error' : '')
       }
       style={{
-        background: token.colorBgElevated,
-        borderTop: `1px solid ${token.colorBorder}`,
         color: token.colorText,
         ...cssVars,
       }}

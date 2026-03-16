@@ -4,15 +4,18 @@ import type { CSSProperties } from 'react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePlayer } from '../../player/PlayerContext';
 import { NowPlayingControls } from './components/NowPlayingControls';
 import { NowPlayingLyricsSection } from './components/NowPlayingLyricsSection';
 import { NowPlayingVinylCover } from './components/NowPlayingVinylCover';
+import { MobileNowPlaying } from './components/MobileNowPlaying';
 
 export function NowPlayingPage() {
   const { token } = theme.useToken();
   const player = usePlayer();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const isLoading = player.status === 'loading';
   const isError = player.status === 'error';
@@ -50,6 +53,12 @@ export function NowPlayingPage() {
     ],
   );
 
+  // 移动端使用专门的组件
+  if (isMobile) {
+    return <MobileNowPlaying />;
+  }
+
+  // 桌面端布局
   return (
     <div
       className={'linktune-now' + (isLoading ? ' is-loading' : '') + (isError ? ' is-error' : '')}

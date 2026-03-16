@@ -1,9 +1,11 @@
 import {
   ArrowLeftOutlined,
+  CaretRightFilled,
   ClearOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
+  EllipsisOutlined,
   HolderOutlined,
   PlayCircleOutlined,
 } from '@ant-design/icons';
@@ -12,6 +14,8 @@ import type { ColumnsType } from 'antd/es/table';
 import type { MenuProps } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   DndContext,
   closestCenter,
@@ -92,6 +96,7 @@ export function LocalPlaylistDetailPage() {
   const auth = useAuth();
   const player = usePlayer();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const location = useLocation();
   const { playlistId } = useParams();
@@ -522,67 +527,226 @@ export function LocalPlaylistDetailPage() {
   }
 
   if (!playlist) {
-    return <Alert type="warning" showIcon message="歌单不存在或已被删除" />;
+    return (
+      <div className={isMobile ? 'mobile-page' : 'linktune-page'}>
+        <Alert type="warning" showIcon message="歌单不存在或已被删除" style={{ borderRadius: 12 }} />
+      </div>
+    );
   }
 
   const pageTitle = passedName || playlist.name;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
-      {/* 顶部操作栏 */}
-      <div
-        style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'nowrap' }}
-      >
-        <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={handleGoBack} title="返回歌单列表" />
+  // 歌曲项的移动端更多菜单
+  const getMobileSongMenu = (song: LocalPlaylistSong): MenuProps => ({
+    items: [
+      { key: 'delete', label: '从歌单移除', icon: <DeleteOutlined />, danger: true },
+    ],
+    onClick: ({ key }) => {
+      if (key === 'delete') {
+        void handleRemoveSong(song);
+      }
+    },
+  });
 
-          <div style={{ minWidth: 0, flex: 1 }}>
-            {isEditing ? (
-              <Input
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-                onPressEnter={() => void handleSaveName()}
-                onBlur={() => void handleSaveName()}
-                autoFocus
-                style={{ maxWidth: 300, fontSize: 18, fontWeight: 600 }}
-              />
-            ) : (
-              <Typography.Title
-                level={3}
-                ellipsis={{ tooltip: pageTitle }}
-                style={{ marginBottom: 0, cursor: 'pointer' }}
-                onClick={handleStartEditName}
-              >
-                {pageTitle}
-                <EditOutlined style={{ marginLeft: 8, fontSize: 14, color: token.colorTextTertiary }} />
-              </Typography.Title>
-            )}
-            <Space size={8} wrap style={{ marginTop: 6 }}>
-              <Tag color="green">本地歌单</Tag>
-              <Typography.Text type="secondary">{playlist.songs.length} 首歌曲</Typography.Text>
-            </Space>
-          </div>
+  // 移动端布局
+  if (isMobile) {
+    return (
+      <div className="mobile-page">
+        {/* 返回按钮 */}
+        <div className="mobile-page__back-header">
+          <button type="button" className="mobile-page__back-btn" onClick={handleGoBack}>
+            <ArrowLeftOutlined />
+          </button>
+          <div style={{ flex: 1 }} />
+          <Dropdown menu={{ items: moreMenuItems }} trigger={['click']}>
+            <button type="button" className="mobile-page__back-btn">
+              <EllipsisOutlined />
+            </button>
+          </Dropdown>
         </div>
 
-        <Space>
-          {isSelectMode && selectedKeys.size > 0 && (
-            <Popconfirm
-              title={`确定删除选中的 ${selectedKeys.size} 首歌曲吗？`}
-              onConfirm={() => void handleBatchDelete()}
-              okText="删除"
-              okButtonProps={{ danger: true }}
-              cancelText="取消"
-            >
-              <Button danger>删除选中 ({selectedKeys.size})</Button>
-            </Popconfirm>
+        {/* Hero 头部 */}
+        <div className="mobile-list-hero">
+          <div className="mobile-list-hero__cover">
+            <span style={{ fontSize: 56, color: 'rgba(255,255,255,0.8)' }}>🎵</span>
+          </div>
+          {isEditing ? (
+            <Input
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              onPressEnter={() => void handleSaveName()}
+              onBlur={() => void handleSaveName()}
+              autoFocus
+              style={{ maxWidth: 250, borderRadius: 10, textAlign: 'center', fontSize: 18, fontWeight: 700 }}
+            />
+          ) : (
+            <h2 className="mobile-list-hero__title" onClick={handleStartEditName} style={{ cursor: 'pointer' }}>
+              {pageTitle} <EditOutlined style={{ fontSize: 14, opacity: 0.5 }} />
+            </h2>
           )}
-          <Dropdown menu={{ items: moreMenuItems }} trigger={['click']}>
-            <Button>更多操作</Button>
-          </Dropdown>
-          <Button type="primary" onClick={handlePlayAll} disabled={playlist.songs.length === 0}>
-            播放全部
-          </Button>
-        </Space>
+          <p className="mobile-list-hero__desc">
+            本地歌单 · {playlist.songs.length} 首歌曲
+          </p>
+        </div>
+
+        {/* 列表工具栏 */}
+        {playlist.songs.length > 0 && (
+          <div className="mobile-list-toolbar">
+            <span className="mobile-list-toolbar__info">{playlist.songs.length} 首</span>
+            <div className="mobile-list-toolbar__actions">
+              <button
+                type="button"
+                className="mobile-list-toolbar__btn mobile-list-toolbar__btn--primary"
+                onClick={handlePlayAll}
+              >
+                <CaretRightFilled /> 播放全部
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 歌曲列表 */}
+        {playlist.songs.length === 0 ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">🎶</div>
+            <h3 className="mobile-empty__title">歌单还是空的</h3>
+            <p className="mobile-empty__desc">去搜索页面添加喜欢的歌曲吧</p>
+          </div>
+        ) : (
+          <div className="mobile-song-list">
+            {playlist.songs.map((song, index) => {
+              const platform = song.platform || song.source || 'netease';
+              const trackId = `${platform}:${song.id}`;
+              const isCurrent = player.currentTrack?.id === trackId;
+              return (
+                <button
+                  key={getSongKey(song)}
+                  type="button"
+                  className={`mobile-song-item ${isCurrent ? 'is-playing' : ''}`}
+                  onClick={async () => {
+                    const t = buildTrack(song);
+                    if (t) await player.playTrack(t);
+                  }}
+                >
+                  {/* 序号 / 播放动画 */}
+                  {isCurrent ? (
+                    <div className="mobile-song-item__playing-indicator">
+                      <span /><span /><span />
+                    </div>
+                  ) : (
+                    <span className="mobile-song-item__index">{index + 1}</span>
+                  )}
+
+                  {/* 信息 */}
+                  <div className="mobile-song-item__info">
+                    <p className="mobile-song-item__title">{song.name}</p>
+                    <div className="mobile-song-item__meta">
+                      <p className="mobile-song-item__artist">{joinArtists(song.artists || [])}</p>
+                      <span className="mobile-song-item__tag mobile-song-item__tag--platform">
+                        {labelForSource(platform)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 更多按钮 */}
+                  <Dropdown menu={getMobileSongMenu(song)} trigger={['click']} placement="bottomRight">
+                    <div className="mobile-song-item__action" onClick={(e) => e.stopPropagation()}>
+                      <EllipsisOutlined />
+                    </div>
+                  </Dropdown>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 复制歌单弹窗 */}
+        <Modal
+          title="复制歌单"
+          open={duplicateModalOpen}
+          onOk={() => void handleDuplicatePlaylist()}
+          onCancel={() => { setDuplicateModalOpen(false); setDuplicateName(''); }}
+          okText="复制"
+          cancelText="取消"
+        >
+          <Input
+            placeholder="请输入新歌单名称"
+            value={duplicateName}
+            onChange={(e) => setDuplicateName(e.target.value)}
+            onPressEnter={() => void handleDuplicatePlaylist()}
+            autoFocus
+            style={{ marginTop: 12 }}
+          />
+        </Modal>
+      </div>
+    );
+  }
+
+  // 桌面端布局
+  return (
+    <div className="linktune-page linktune-playlistDetail">
+      {/* 顶部操作栏 */}
+      <div className="linktune-page__header" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={handleGoBack}
+              title="返回歌单列表"
+              style={{ borderRadius: 10 }}
+            />
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              {isEditing ? (
+                <Input
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onPressEnter={() => void handleSaveName()}
+                  onBlur={() => void handleSaveName()}
+                  autoFocus
+                  size="large"
+                  style={{ maxWidth: 300, borderRadius: 10 }}
+                />
+              ) : (
+                <Typography.Title
+                  level={2}
+                  className="linktune-page__title"
+                  ellipsis={{ tooltip: pageTitle }}
+                  style={{ marginBottom: 4, cursor: 'pointer' }}
+                  onClick={handleStartEditName}
+                >
+                  {pageTitle}
+                  <EditOutlined style={{ marginLeft: 10, fontSize: 16, color: token.colorTextTertiary }} />
+                </Typography.Title>
+              )}
+              <Space size={12} wrap>
+                <Tag color="green" style={{ borderRadius: 8 }}>本地歌单</Tag>
+                <Typography.Text type="secondary">{playlist.songs.length} 首歌曲</Typography.Text>
+              </Space>
+            </div>
+          </div>
+
+          <Space wrap>
+            {isSelectMode && selectedKeys.size > 0 && (
+              <Popconfirm
+                title={`确定删除选中的 ${selectedKeys.size} 首歌曲吗？`}
+                onConfirm={() => void handleBatchDelete()}
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="取消"
+              >
+                <Button danger style={{ borderRadius: 10 }}>删除选中 ({selectedKeys.size})</Button>
+              </Popconfirm>
+            )}
+            <Dropdown menu={{ items: moreMenuItems }} trigger={['click']}>
+              <Button style={{ borderRadius: 10 }}>更多操作</Button>
+            </Dropdown>
+            <Button type="primary" onClick={handlePlayAll} disabled={playlist.songs.length === 0} style={{ borderRadius: 10 }}>
+              播放全部
+            </Button>
+          </Space>
+        </div>
       </div>
 
       {/* 歌曲列表 */}

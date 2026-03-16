@@ -141,6 +141,66 @@ export async function embyGetPlaylists(params: {
     .filter(Boolean) as EmbyPlaylist[];
 }
 
+/**
+ * 分页获取 Emby 歌单列表（用于移动端滚动加载）
+ */
+export async function embyGetPlaylistsPage(params: {
+  credentials: EmbyCredentials;
+  startIndex: number;
+  limit: number;
+  signal?: AbortSignal;
+}): Promise<{ items: EmbyPlaylist[]; total: number }> {
+  const { credentials } = params;
+
+  if (credentials.method === 'password' && !credentials.userId) {
+    throw new Error('Emby 登录态缺少 UserId，请退出后重新登录');
+  }
+
+  const token = credentials.method === 'password' ? credentials.accessToken : credentials.apiKey;
+  const userId = credentials.method === 'password' ? credentials.userId : undefined;
+
+  const q = new URLSearchParams();
+  if (userId) q.set('UserId', userId);
+  q.set('Recursive', 'true');
+  q.set('IncludeItemTypes', 'Playlist');
+  q.set('SortBy', 'SortName');
+  q.set('SortOrder', 'Ascending');
+  q.set('Fields', 'ChildCount');
+  q.set('StartIndex', String(Math.max(0, params.startIndex)));
+  q.set('Limit', String(Math.max(1, Math.min(200, params.limit))));
+  q.set('EnableTotalRecordCount', 'true');
+
+  const url = userId
+    ? `${credentials.baseUrl}/Users/${encodeURIComponent(userId)}/Items?${q.toString()}`
+    : `${credentials.baseUrl}/Items?${q.toString()}`;
+
+  const data = await fetchJson<EmbyItemsResult<EmbyPlaylistItemDto>>(url, {
+    signal: params.signal,
+    headers: buildEmbyHeaders({
+      accessTokenOrApiKey: token,
+      userId,
+      client: credentials.client,
+      device: credentials.device,
+      deviceId: credentials.deviceId,
+      version: credentials.version,
+    }),
+  });
+
+  const items = (data.Items ?? [])
+    .map((it) => {
+      const id = it.Id?.trim();
+      if (!id) return null;
+      return {
+        id,
+        name: it.Name ?? '未命名歌单',
+        songCount: typeof it.ChildCount === 'number' ? it.ChildCount : undefined,
+      } satisfies EmbyPlaylist;
+    })
+    .filter(Boolean) as EmbyPlaylist[];
+
+  return { items, total: Number(data.TotalRecordCount ?? 0) };
+}
+
 export async function embyGetPlaylistSongsPage(params: {
   credentials: EmbyCredentials;
   playlistId: string;

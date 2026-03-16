@@ -1,9 +1,11 @@
-import { DeleteOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Modal, Space, Typography, message, theme } from 'antd';
+import { CaretRightFilled, DeleteOutlined, EllipsisOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, Dropdown, Modal, Space, Typography, message, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { MenuProps } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { loadAudioQuality } from '../../config/audioQualityConfig';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
 import { buildCustomAudioUrl, customParseSongs, type CustomPlatform } from '../../protocols/custom/library';
@@ -19,6 +21,7 @@ export function HistoryPage() {
   const { token } = theme.useToken();
   const auth = useAuth();
   const player = usePlayer();
+  const isMobile = useIsMobile();
 
   const [history, setHistory] = useState<PlayHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,8 +47,9 @@ export function HistoryPage() {
     void loadHistory();
   }, [loadHistory]);
 
-  // 自动调整表格高度
+  // 自动调整表格高度（桌面端）
   useEffect(() => {
+    if (isMobile) return;
     const el = tableWrapRef.current;
     if (!el) return;
 
@@ -57,7 +61,7 @@ export function HistoryPage() {
 
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [isMobile]);
 
   // 构建 Track 对象
   const buildTrack = useCallback(
@@ -194,7 +198,22 @@ export function HistoryPage() {
     return new Date(timestamp).toLocaleDateString();
   };
 
-  // 表格列定义
+  // 歌曲项的更多菜单
+  const getSongMenu = useCallback((item: PlayHistoryItem): MenuProps => ({
+    items: [
+      { key: 'add', label: '添加到歌单', icon: <PlusOutlined /> },
+      { key: 'delete', label: '删除记录', icon: <DeleteOutlined />, danger: true },
+    ],
+    onClick: ({ key }: { key: string }) => {
+      if (key === 'add') {
+        handleAddToPlaylist(item);
+      } else if (key === 'delete') {
+        void handleDelete(item);
+      }
+    },
+  }), [handleAddToPlaylist, handleDelete]);
+
+  // 表格列定义（桌面端）
   const columns: ColumnsType<UnifiedSong> = useMemo(() => {
     return [
       {
@@ -289,36 +308,154 @@ export function HistoryPage() {
 
   // 非 custom 协议时显示提示
   if (!auth.credentials || auth.credentials.protocol !== 'custom') {
-    return <Alert type="warning" showIcon message="播放历史功能仅支持 TuneHub 协议" />;
+    return (
+      <div className={isMobile ? 'mobile-page' : 'linktune-page'}>
+        <Alert type="warning" showIcon message="播放历史功能仅支持 TuneHub 协议" style={{ borderRadius: 12 }} />
+      </div>
+    );
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-      {/* 头部 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            播放历史
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            共 {history.length} 首歌曲
-          </Typography.Text>
+  // 移动端布局
+  if (isMobile) {
+    return (
+      <div className="mobile-page">
+        {/* 页面标题 */}
+        <div className="mobile-page__header">
+          <h1 className="mobile-page__title">播放历史</h1>
+          <p className="mobile-page__subtitle">共 {history.length} 首歌曲</p>
         </div>
 
-        <Space>
-          <Button onClick={handleClearAll} disabled={history.length === 0}>
-            清空历史
-          </Button>
-          <Button type="primary" onClick={handlePlayAll} disabled={history.length === 0}>
-            播放全部
-          </Button>
-        </Space>
+        {/* 列表工具栏 */}
+        {history.length > 0 && (
+          <div className="mobile-list-toolbar">
+            <div className="mobile-list-toolbar__actions" style={{ width: '100%', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                className="mobile-list-toolbar__btn mobile-list-toolbar__btn--secondary"
+                onClick={handleClearAll}
+              >
+                <DeleteOutlined /> 清空
+              </button>
+              <button
+                type="button"
+                className="mobile-list-toolbar__btn mobile-list-toolbar__btn--primary"
+                onClick={handlePlayAll}
+              >
+                <CaretRightFilled /> 播放全部
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 历史列表 */}
+        {loading ? (
+          <div className="mobile-loading">
+            <div className="mobile-loading__spinner" />
+          </div>
+        ) : history.length === 0 ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">📝</div>
+            <h3 className="mobile-empty__title">暂无播放历史</h3>
+            <p className="mobile-empty__desc">播放的歌曲会自动记录在这里</p>
+          </div>
+        ) : (
+          <div className="mobile-song-list">
+            {history.map((item) => {
+              const isCurrent = player.currentTrack?.id === item.id;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`mobile-song-item ${isCurrent ? 'is-playing' : ''}`}
+                  onClick={async () => {
+                    const t = buildTrack(item);
+                    if (t) await player.playTrack(t);
+                  }}
+                >
+                  {/* 播放动画 / 封面 */}
+                  {isCurrent ? (
+                    <div className="mobile-song-item__playing-indicator">
+                      <span /><span /><span />
+                    </div>
+                  ) : (
+                    <div className="mobile-song-item__cover">
+                      {item.coverUrl ? (
+                        <img src={item.coverUrl} alt={item.name} />
+                      ) : (
+                        <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.6)' }}>🎵</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 信息 */}
+                  <div className="mobile-song-item__info">
+                    <p className="mobile-song-item__title">{item.name}</p>
+                    <div className="mobile-song-item__meta">
+                      <p className="mobile-song-item__artist">
+                        {joinArtists(item.artists)} · {formatPlayedAt(item.playedAt)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 更多按钮 */}
+                  <Dropdown menu={getSongMenu(item)} trigger={['click']} placement="bottomRight">
+                    <div
+                      className="mobile-song-item__action"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <EllipsisOutlined />
+                    </div>
+                  </Dropdown>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <AddToPlaylistModal
+          open={addModalOpen}
+          onClose={() => {
+            setAddModalOpen(false);
+            setSongToAdd(null);
+          }}
+          song={songToAdd}
+        />
+      </div>
+    );
+  }
+
+  // 桌面端布局
+  return (
+    <div className="linktune-page linktune-history">
+      {/* 头部 */}
+      <div className="linktune-page__header" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <Typography.Title level={2} className="linktune-page__title" style={{ marginBottom: 4 }}>
+              播放历史
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              共 {history.length} 首歌曲
+            </Typography.Text>
+          </div>
+
+          <Space wrap>
+            <Button onClick={handleClearAll} disabled={history.length === 0} style={{ borderRadius: 10 }}>
+              清空历史
+            </Button>
+            <Button type="primary" icon={<CaretRightFilled />} onClick={handlePlayAll} disabled={history.length === 0} style={{ borderRadius: 10 }}>
+              播放全部
+            </Button>
+          </Space>
+        </div>
       </div>
 
       {/* 历史列表 */}
       {history.length === 0 && !loading ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Empty description="暂无播放历史" />
+        <div className="linktune-empty">
+          <div className="linktune-empty__icon">📝</div>
+          <h3 className="linktune-empty__title">暂无播放历史</h3>
+          <p className="linktune-empty__desc">播放的歌曲会自动记录在这里</p>
         </div>
       ) : (
         <SongsTable

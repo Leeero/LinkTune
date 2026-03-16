@@ -1,12 +1,14 @@
-import { DeleteOutlined, EditOutlined, FolderAddOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, FolderAddOutlined, PlayCircleOutlined, RightOutlined } from '@ant-design/icons';
 import { Button, Card, Empty, Input, Modal, Popconfirm, Space, Typography, message, theme } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { usePlaylistsStore } from '../../stores/playlistsStore';
+
 import {
   createLocalPlaylist,
   deleteLocalPlaylist,
-  getLocalPlaylists,
   migrateFromLocalStorage,
   renameLocalPlaylist,
   type LocalPlaylist,
@@ -15,30 +17,36 @@ import {
 export function LocalPlaylistsPage() {
   const { token } = theme.useToken();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
-  const [playlists, setPlaylists] = useState<LocalPlaylist[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 从 store 读取缓存数据
+  const playlists = usePlaylistsStore((s) => s.localPlaylists);
+  const loading = usePlaylistsStore((s) => s.localLoading);
+  const initialized = usePlaylistsStore((s) => s.localInitialized);
+  const fetchLocalPlaylists = usePlaylistsStore((s) => s.fetchLocalPlaylists);
+
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createName, setCreateName] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
+  // refresh 重新拉取并更新 store
   const refresh = useCallback(async () => {
-    const list = await getLocalPlaylists();
-    setPlaylists(list);
-    setLoading(false);
-  }, []);
+    await fetchLocalPlaylists();
+  }, [fetchLocalPlaylists]);
 
   useEffect(() => {
-    // 首次加载时尝试迁移 localStorage 数据
-    migrateFromLocalStorage().then((count) => {
-      if (count > 0) {
-        message.success(`已从旧存储迁移 ${count} 个歌单`);
-      }
-      void refresh();
-    });
-  }, [refresh]);
+    if (!initialized) {
+      // 首次加载时尝试迁移 localStorage 数据
+      migrateFromLocalStorage().then((count) => {
+        if (count > 0) {
+          message.success(`已从旧存储迁移 ${count} 个歌单`);
+        }
+        void refresh();
+      });
+    }
+  }, [initialized, refresh]);
 
   const handleCreate = async () => {
     const name = createName.trim();
@@ -82,36 +90,174 @@ export function LocalPlaylistsPage() {
     return null;
   }
 
+  // 移动端布局
+  if (isMobile) {
+    return (
+      <div className="mobile-page">
+        {/* 页面标题 */}
+        <div className="mobile-page__header">
+          <h1 className="mobile-page__title">我的歌单</h1>
+          <p className="mobile-page__subtitle">
+            {playlists.length > 0 ? `共 ${playlists.length} 个歌单` : '创建你的第一个歌单'}
+          </p>
+        </div>
+
+        {/* 新建歌单按钮 */}
+        <button
+          type="button"
+          className="mobile-list-toolbar__btn mobile-list-toolbar__btn--primary"
+          style={{ width: '100%', justifyContent: 'center', padding: '12px 16px', marginBottom: 16, borderRadius: 12 }}
+          onClick={() => setCreateModalOpen(true)}
+        >
+          <FolderAddOutlined /> 新建歌单
+        </button>
+
+        {/* 歌单列表 */}
+        {playlists.length === 0 ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">🎵</div>
+            <h3 className="mobile-empty__title">暂无歌单</h3>
+            <p className="mobile-empty__desc">点击上方按钮创建一个吧</p>
+          </div>
+        ) : (
+          <div className="mobile-playlist-list">
+            {playlists.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="mobile-playlist-item"
+                onClick={() => navigate(`/local-playlists/${p.id}`, { state: { playlistName: p.name } })}
+              >
+                <div className="mobile-playlist-item__cover">🎵</div>
+
+                <div className="mobile-playlist-item__info">
+                  {editingId === p.id ? (
+                    <Input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onPressEnter={() => void handleSaveEdit()}
+                      onBlur={() => void handleSaveEdit()}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                      style={{ borderRadius: 8 }}
+                    />
+                  ) : (
+                    <>
+                      <h4 className="mobile-playlist-item__title">{p.name}</h4>
+                      <p className="mobile-playlist-item__desc">{p.songs.length} 首歌曲</p>
+                    </>
+                  )}
+                </div>
+
+                <div className="mobile-playlist-item__actions" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="mobile-playlist-item__action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/local-playlists/${p.id}`, { state: { playlistName: p.name, autoPlay: true } });
+                    }}
+                  >
+                    <PlayCircleOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-playlist-item__action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartEdit(p);
+                    }}
+                  >
+                    <EditOutlined />
+                  </button>
+                </div>
+
+                <RightOutlined style={{ color: 'var(--lt-text-secondary)', fontSize: 12 }} />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <Modal
+          title="新建歌单"
+          open={createModalOpen}
+          onOk={() => void handleCreate()}
+          onCancel={() => { setCreateModalOpen(false); setCreateName(''); }}
+          okText="创建"
+          cancelText="取消"
+          styles={{ body: { paddingTop: 20 } }}
+        >
+          <Input
+            placeholder="请输入歌单名称"
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+            onPressEnter={() => void handleCreate()}
+            autoFocus
+            size="large"
+            style={{ borderRadius: 10 }}
+          />
+        </Modal>
+      </div>
+    );
+  }
+
+  // 桌面端布局
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography.Title level={3} style={{ marginBottom: 0 }}>
-          我的歌单
-        </Typography.Title>
-        <Button type="primary" icon={<FolderAddOutlined />} onClick={() => setCreateModalOpen(true)}>
-          新建歌单
-        </Button>
+    <div className="linktune-page linktune-playlists">
+      {/* 页面头部 */}
+      <div className="linktune-page__header" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <Typography.Title level={2} className="linktune-page__title" style={{ marginBottom: 4 }}>
+              我的歌单
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              {playlists.length > 0 ? `共 ${playlists.length} 个歌单` : '创建你的第一个歌单'}
+            </Typography.Text>
+          </div>
+          <Button
+            type="primary"
+            icon={<FolderAddOutlined />}
+            onClick={() => setCreateModalOpen(true)}
+            style={{ borderRadius: 10 }}
+          >
+            新建歌单
+          </Button>
+        </div>
       </div>
 
       {playlists.length === 0 ? (
-        <Empty description="暂无歌单，点击右上角新建一个吧" style={{ marginTop: 60 }} />
+        <div className="linktune-page__empty">
+          <Empty
+            description={
+              <span>
+                暂无歌单
+                <br />
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  点击右上角「新建歌单」创建一个吧
+                </Typography.Text>
+              </span>
+            }
+          />
+        </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-            gap: 16,
-          }}
-        >
+        <div className="linktune-playlists__grid">
           {playlists.map((p) => (
             <Card
               key={p.id}
               hoverable
+              className="linktune-playlists__card"
               style={{ borderColor: token.colorBorder }}
-              styles={{ body: { padding: 16 } }}
+              styles={{ body: { padding: 0 } }}
               onClick={() => navigate(`/local-playlists/${p.id}`, { state: { playlistName: p.name } })}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* 封面区域 */}
+              <div className="linktune-playlists__cardCover">
+                🎵
+              </div>
+
+              {/* 信息区域 */}
+              <div style={{ padding: 16 }}>
                 {editingId === p.id ? (
                   <Input
                     value={editingName}
@@ -120,9 +266,10 @@ export function LocalPlaylistsPage() {
                     onBlur={() => void handleSaveEdit()}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
+                    style={{ borderRadius: 8 }}
                   />
                 ) : (
-                  <Typography.Text strong ellipsis style={{ fontSize: 16 }}>
+                  <Typography.Text strong ellipsis style={{ fontSize: 15, display: 'block', marginBottom: 4 }}>
                     {p.name}
                   </Typography.Text>
                 )}
@@ -131,7 +278,7 @@ export function LocalPlaylistsPage() {
                   {p.songs.length} 首歌曲
                 </Typography.Text>
 
-                <Space size={4} style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                <Space size={4} style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
                   <Button
                     type="text"
                     size="small"
@@ -140,6 +287,7 @@ export function LocalPlaylistsPage() {
                       e.stopPropagation();
                       navigate(`/local-playlists/${p.id}`, { state: { playlistName: p.name, autoPlay: true } });
                     }}
+                    style={{ borderRadius: 8 }}
                   >
                     播放
                   </Button>
@@ -151,6 +299,7 @@ export function LocalPlaylistsPage() {
                       e.stopPropagation();
                       handleStartEdit(p);
                     }}
+                    style={{ borderRadius: 8 }}
                   />
                   <Popconfirm
                     title="确定删除这个歌单吗？"
@@ -164,6 +313,7 @@ export function LocalPlaylistsPage() {
                       danger
                       icon={<DeleteOutlined />}
                       onClick={(e) => e.stopPropagation()}
+                      style={{ borderRadius: 8 }}
                     />
                   </Popconfirm>
                 </Space>
@@ -183,6 +333,9 @@ export function LocalPlaylistsPage() {
         }}
         okText="创建"
         cancelText="取消"
+        styles={{
+          body: { paddingTop: 20 },
+        }}
       >
         <Input
           placeholder="请输入歌单名称"
@@ -190,7 +343,8 @@ export function LocalPlaylistsPage() {
           onChange={(e) => setCreateName(e.target.value)}
           onPressEnter={() => void handleCreate()}
           autoFocus
-          style={{ marginTop: 12 }}
+          size="large"
+          style={{ borderRadius: 10 }}
         />
       </Modal>
     </div>

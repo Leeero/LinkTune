@@ -1,30 +1,35 @@
-import { PlayCircleOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Input, Segmented, Space, Spin, Typography, theme } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CaretRightFilled, CloseCircleFilled, EllipsisOutlined, PlayCircleOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Alert, Button, Spin, Typography, Dropdown, message } from 'antd';
+import type { MenuProps } from 'antd';
+import { useCallback, useRef, useState } from 'react';
 
 import { loadAudioQuality } from '../../config/audioQualityConfig';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePlayer } from '../../player/PlayerContext';
 import type { Track } from '../../player/types';
 import { buildCustomAudioUrl, customParseSongs, type CustomPlatform, type CustomSong } from '../../protocols/custom/library';
 import { customSearchSongs, type SearchResult } from '../../protocols/custom/search';
 import { useAuth } from '../../session/AuthProvider';
-import { SongsTable } from '../library/components/SongsTable';
-import type { UnifiedSong } from '../library/types';
 import { joinArtists } from '../library/utils/format';
 import { AddToPlaylistModal } from '../local-playlists/AddToPlaylistModal';
 import type { LocalPlaylistSong } from '../local-playlists/localPlaylistDB';
 
-const PLATFORM_OPTIONS = [
-  { label: '网易云', value: 'netease' },
-  { label: 'QQ音乐', value: 'qq' },
-  { label: '酷我', value: 'kuwo' },
+const PLATFORM_OPTIONS: Array<{
+  id: CustomPlatform;
+  name: string;
+  icon: string;
+  gradient: string;
+}> = [
+  { id: 'netease', name: '网易云', icon: '🎵', gradient: 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)' },
+  { id: 'qq', name: 'QQ音乐', icon: '🎧', gradient: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)' },
+  { id: 'kuwo', name: '酷我', icon: '🎤', gradient: 'linear-gradient(135deg, #f39c12 0%, #d68910 100%)' },
 ];
 
 export function SearchPage() {
-  const { token } = theme.useToken();
   const auth = useAuth();
   const player = usePlayer();
+  const isMobile = useIsMobile();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [keyword, setKeyword] = useState('');
   const [platform, setPlatform] = useState<CustomPlatform>('netease');
@@ -33,26 +38,8 @@ export function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
-  const tableWrapRef = useRef<HTMLDivElement | null>(null);
-  const [tableBodyY, setTableBodyY] = useState<number>(420);
-
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [songToAdd, setSongToAdd] = useState<LocalPlaylistSong | null>(null);
-
-  // 自动调整表格高度
-  useEffect(() => {
-    const el = tableWrapRef.current;
-    if (!el) return;
-
-    const ro = new ResizeObserver(() => {
-      const h = el.getBoundingClientRect().height;
-      const bodyY = Math.max(220, Math.floor(h - 60));
-      setTableBodyY(bodyY);
-    });
-
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // 执行搜索
   const doSearch = useCallback(async (overridePlatform?: CustomPlatform) => {
@@ -65,6 +52,11 @@ export function SearchPage() {
     setLoading(true);
     setError(null);
     setSearched(true);
+
+    // 移动端收起键盘
+    if (isMobile && inputRef.current) {
+      inputRef.current.blur();
+    }
 
     try {
       const res = await customSearchSongs({
@@ -82,7 +74,7 @@ export function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth.credentials, keyword, platform]);
+  }, [auth.credentials, keyword, platform, isMobile]);
 
   // 按回车搜索
   const handleKeyDown = useCallback(
@@ -96,17 +88,23 @@ export function SearchPage() {
 
   // 切换平台时重新搜索
   const handlePlatformChange = useCallback(
-    (val: string | number) => {
-      const newPlatform = val as CustomPlatform;
-      setPlatform(newPlatform);
-      // 如果已经搜索过，切换平台时自动重新搜索
-      // 传入新平台值，避免闭包捕获旧值的问题
+    (val: CustomPlatform) => {
+      setPlatform(val);
       if (searched && keyword.trim()) {
-        void doSearch(newPlatform);
+        void doSearch(val);
       }
     },
     [doSearch, keyword, searched],
   );
+
+  // 清除搜索
+  const handleClear = useCallback(() => {
+    setKeyword('');
+    setResult(null);
+    setSearched(false);
+    setError(null);
+    inputRef.current?.focus();
+  }, []);
 
   // 构建 Track 对象
   const buildTrack = useCallback(
@@ -194,133 +192,334 @@ export function SearchPage() {
     await player.playTracks(tracks, 0);
   }, [buildTrack, player, result]);
 
-  // 表格列定义
-  const columns: ColumnsType<UnifiedSong> = useMemo(() => {
-    return [
-      {
-        title: '歌曲',
-        dataIndex: 'name',
-        key: 'name',
-        ellipsis: true,
-        render: (_: unknown, row) => {
-          const isCurrent = player.currentTrack?.id === row.id;
-          const artist = joinArtists(row.artists);
-
-          return (
-            <Space size={10} style={{ minWidth: 0 }}>
-              <Button
-                type={isCurrent ? 'primary' : 'text'}
-                icon={<PlayCircleOutlined />}
-                onClick={async () => {
-                  const t = buildTrack(row as CustomSong);
-                  if (!t) return;
-                  await player.playTrack(t);
-                }}
-              />
-              <Button
-                type="text"
-                icon={<PlusOutlined />}
-                onClick={() => handleAddToPlaylist(row as CustomSong)}
-                title="添加到歌单"
-              />
-
-              <div style={{ minWidth: 0 }}>
-                <Typography.Text strong style={{ color: token.colorText }} ellipsis>
-                  {row.name}
-                </Typography.Text>
-                <div>
-                  <Typography.Text style={{ color: token.colorTextSecondary }} ellipsis>
-                    {artist}
-                  </Typography.Text>
-                </div>
-              </div>
-            </Space>
-          );
-        },
-      },
-    ];
-  }, [buildTrack, handleAddToPlaylist, player, token.colorText, token.colorTextSecondary]);
+  // 歌曲项的更多菜单
+  const getSongMenu = useCallback((song: CustomSong): MenuProps => ({
+    items: [
+      { key: 'add', label: '添加到歌单', icon: <PlusOutlined /> },
+      { key: 'next', label: '下一首播放' },
+    ],
+    onClick: ({ key }) => {
+      if (key === 'add') {
+        handleAddToPlaylist(song);
+      } else {
+        message.info(`${key}（功能占位）`);
+      }
+    },
+  }), [handleAddToPlaylist]);
 
   // 非 custom 协议时显示提示
   if (!auth.credentials || auth.credentials.protocol !== 'custom') {
-    return <Alert type="warning" showIcon message="搜索功能仅支持 TuneHub 协议" />;
+    return (
+      <div className={isMobile ? 'mobile-page' : 'linktune-page'}>
+        <Alert type="warning" showIcon message="搜索功能仅支持 TuneHub 协议" style={{ borderRadius: 12 }} />
+      </div>
+    );
   }
 
   const songs = result?.songs || [];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-      {/* 搜索头部 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Typography.Title level={3} style={{ marginBottom: 0 }}>
-          搜索
-        </Typography.Title>
+  // 移动端布局
+  if (isMobile) {
+    return (
+      <div className="mobile-page">
+        {/* 页面标题 */}
+        <div className="mobile-page__header">
+          <h1 className="mobile-page__title">搜索</h1>
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Input
-            placeholder="输入歌曲名、歌手名搜索"
-            prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+        {/* 搜索栏 */}
+        <div className="mobile-search-bar">
+          <SearchOutlined className="mobile-search-bar__icon" />
+          <input
+            ref={inputRef}
+            type="search"
+            className="mobile-search-bar__input"
+            placeholder="搜索歌曲、歌手..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={handleKeyDown}
-            style={{ width: 320 }}
-            allowClear
+            enterKeyHint="search"
           />
-          <Button type="primary" icon={<SearchOutlined />} onClick={() => doSearch()} loading={loading}>
+          {keyword && (
+            <button
+              type="button"
+              className="mobile-search-bar__clear"
+              onClick={handleClear}
+            >
+              <CloseCircleFilled />
+            </button>
+          )}
+        </div>
+
+        {/* 平台选择 */}
+        <div className="mobile-platform-selector">
+          {PLATFORM_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`mobile-platform-btn ${platform === opt.id ? 'is-active' : ''}`}
+              onClick={() => handlePlatformChange(opt.id)}
+              style={platform === opt.id ? { background: opt.gradient } : undefined}
+            >
+              <span>{opt.icon}</span>
+              <span>{opt.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* 错误提示 */}
+        {error && <Alert type="error" showIcon message={error} style={{ borderRadius: 12, marginBottom: 16 }} />}
+
+        {/* 搜索结果 */}
+        {loading ? (
+          <div className="mobile-loading">
+            <div className="mobile-loading__spinner" />
+          </div>
+        ) : searched && songs.length === 0 && !error ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">🔍</div>
+            <h3 className="mobile-empty__title">未找到相关歌曲</h3>
+            <p className="mobile-empty__desc">
+              {platform === 'qq' ? 'QQ 音乐接口可能暂时不可用，请尝试其他平台' : '尝试换个关键词或切换平台'}
+            </p>
+          </div>
+        ) : songs.length > 0 ? (
+          <>
+            {/* 列表工具栏 */}
+            <div className="mobile-list-toolbar">
+              <span className="mobile-list-toolbar__info">
+                共 {result?.total?.toLocaleString() || songs.length} 首
+              </span>
+              <div className="mobile-list-toolbar__actions">
+                <button
+                  type="button"
+                  className="mobile-list-toolbar__btn mobile-list-toolbar__btn--primary"
+                  onClick={handlePlayAll}
+                >
+                  <CaretRightFilled /> 播放全部
+                </button>
+              </div>
+            </div>
+
+            {/* 歌曲列表 */}
+            <div className="mobile-song-list">
+              {songs.map((song, index) => {
+                const isCurrent = player.currentTrack?.id === song.id;
+                return (
+                  <button
+                    key={song.id}
+                    type="button"
+                    className={`mobile-song-item ${isCurrent ? 'is-playing' : ''}`}
+                    onClick={async () => {
+                      const t = buildTrack(song);
+                      if (t) await player.playTrack(t);
+                    }}
+                  >
+                    {/* 序号 / 播放动画 */}
+                    {isCurrent ? (
+                      <div className="mobile-song-item__playing-indicator">
+                        <span /><span /><span />
+                      </div>
+                    ) : (
+                      <span className="mobile-song-item__index">{index + 1}</span>
+                    )}
+
+                    {/* 封面 */}
+                    <div className="mobile-song-item__cover">
+                      {song.cover ? (
+                        <img src={song.cover} alt={song.name} />
+                      ) : (
+                        <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.6)' }}>🎵</span>
+                      )}
+                    </div>
+
+                    {/* 信息 */}
+                    <div className="mobile-song-item__info">
+                      <p className="mobile-song-item__title">{song.name}</p>
+                      <div className="mobile-song-item__meta">
+                        <p className="mobile-song-item__artist">{joinArtists(song.artists)}</p>
+                      </div>
+                    </div>
+
+                    {/* 更多按钮 */}
+                    <Dropdown menu={getSongMenu(song)} trigger={['click']} placement="bottomRight">
+                      <div
+                        className="mobile-song-item__action"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <EllipsisOutlined />
+                      </div>
+                    </Dropdown>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : !searched ? (
+          <div className="mobile-empty">
+            <div className="mobile-empty__icon">🎶</div>
+            <h3 className="mobile-empty__title">搜索你喜欢的音乐</h3>
+            <p className="mobile-empty__desc">输入歌曲名或歌手名开始搜索</p>
+          </div>
+        ) : null}
+
+        <AddToPlaylistModal
+          open={addModalOpen}
+          onClose={() => {
+            setAddModalOpen(false);
+            setSongToAdd(null);
+          }}
+          song={songToAdd}
+        />
+      </div>
+    );
+  }
+
+  // 桌面端布局
+  return (
+    <div className="linktune-page linktune-search">
+      {/* 页面头部 */}
+      <div className="linktune-page__header">
+        <Typography.Title level={2} className="linktune-page__title" style={{ marginBottom: 20 }}>
+          搜索
+        </Typography.Title>
+
+        {/* 搜索框 */}
+        <div className="linktune-searchbar">
+          <input
+            ref={inputRef}
+            type="text"
+            className="linktune-searchbar__input"
+            placeholder="搜索歌曲、歌手..."
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <Button
+            type="primary"
+            size="large"
+            icon={<SearchOutlined />}
+            onClick={() => doSearch()}
+            loading={loading}
+            className="linktune-searchbar__btn"
+          >
             搜索
           </Button>
-          <Segmented options={PLATFORM_OPTIONS} value={platform} onChange={handlePlatformChange} />
+        </div>
+
+        {/* 平台选择卡片 */}
+        <div className="linktune-platforms">
+          {PLATFORM_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`linktune-platforms__item ${platform === opt.id ? 'is-active' : ''}`}
+              onClick={() => handlePlatformChange(opt.id)}
+              style={platform === opt.id ? { background: opt.gradient } : undefined}
+            >
+              <span className="linktune-platforms__icon">{opt.icon}</span>
+              <span className="linktune-platforms__name">{opt.name}</span>
+            </button>
+          ))}
         </div>
       </div>
 
       {/* 搜索结果 */}
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && <Alert type="error" showIcon message={error} style={{ borderRadius: 12, marginTop: 16 }} />}
 
       {loading ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="linktune-loading">
           <Spin size="large" tip="搜索中..." />
         </div>
       ) : searched && songs.length === 0 && !error ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Empty
-            description={
-              <span>
-                未找到相关歌曲
-                <br />
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {platform === 'qq' ? '提示：QQ 音乐接口可能暂时不可用，请尝试其他平台' : '尝试换个关键词或切换平台'}
-                </Typography.Text>
-              </span>
-            }
-          />
+        <div className="linktune-empty">
+          <div className="linktune-empty__icon">🔍</div>
+          <h3 className="linktune-empty__title">未找到相关歌曲</h3>
+          <p className="linktune-empty__desc">
+            {platform === 'qq' ? 'QQ 音乐接口可能暂时不可用，请尝试其他平台' : '尝试换个关键词或切换平台'}
+          </p>
         </div>
       ) : songs.length > 0 ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="linktune-songlist__toolbar">
             <Typography.Text type="secondary">
               共找到 {result?.total?.toLocaleString() || songs.length} 首歌曲
             </Typography.Text>
-            <Button type="primary" onClick={handlePlayAll}>
+            <Button
+              type="primary"
+              icon={<CaretRightFilled />}
+              onClick={handlePlayAll}
+              className="linktune-songlist__toolbar-btn"
+            >
               播放全部
             </Button>
           </div>
 
-          <SongsTable
-            tableWrapRef={tableWrapRef}
-            songs={songs}
-            columns={columns}
-            loading={false}
-            tableBodyY={tableBodyY}
-            onRowDoubleClick={async (row) => {
-              const t = buildTrack(row as CustomSong);
-              if (!t) return;
-              await player.playTrack(t);
-            }}
-          />
+          {/* 桌面端歌曲列表 */}
+          <div className="linktune-songlist">
+            {songs.map((song) => {
+              const isCurrent = player.currentTrack?.id === song.id;
+              return (
+                <div
+                  key={song.id}
+                  className={`linktune-song-row ${isCurrent ? 'is-playing' : ''}`}
+                  onClick={async () => {
+                    const t = buildTrack(song);
+                    if (t) await player.playTrack(t);
+                  }}
+                >
+                  {/* 播放按钮 */}
+                  <button
+                    type="button"
+                    className="linktune-song-row__play"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const t = buildTrack(song);
+                      if (t) await player.playTrack(t);
+                    }}
+                  >
+                    <PlayCircleOutlined />
+                  </button>
+
+                  {/* 封面 */}
+                  <div className="linktune-song-row__cover">
+                    {song.cover ? (
+                      <img src={song.cover} alt={song.name} />
+                    ) : (
+                      <span className="linktune-song-row__cover-placeholder">🎵</span>
+                    )}
+                  </div>
+
+                  {/* 信息 */}
+                  <div className="linktune-song-row__info">
+                    <div className="linktune-song-row__title">{song.name}</div>
+                    <div className="linktune-song-row__artist">{joinArtists(song.artists)}</div>
+                  </div>
+
+                  {/* 操作按钮 */}
+                  <div className="linktune-song-row__actions">
+                    <button
+                      type="button"
+                      className="linktune-song-row__action-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddToPlaylist(song);
+                      }}
+                      title="添加到歌单"
+                    >
+                      <PlusOutlined />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </>
       ) : !searched ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Empty description="输入关键词开始搜索" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <div className="linktune-empty">
+          <div className="linktune-empty__icon">🎶</div>
+          <h3 className="linktune-empty__title">搜索你喜欢的音乐</h3>
+          <p className="linktune-empty__desc">输入歌曲名或歌手名开始搜索</p>
         </div>
       ) : null}
 

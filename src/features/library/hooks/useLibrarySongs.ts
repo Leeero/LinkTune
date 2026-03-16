@@ -48,6 +48,7 @@ type UseLibrarySongsResult = {
 
   tableWrapRef: React.RefObject<HTMLDivElement | null>;
   tableBodyY: number;
+  loadSongsChunk: (args: { reset: boolean }) => Promise<void>;
 };
 
 export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsResult {
@@ -516,5 +517,6 @@ export function useLibrarySongs(params: UseLibrarySongsParams): UseLibrarySongsR
 
     tableWrapRef,
     tableBodyY,
+    loadSongsChunk,
   };
 }

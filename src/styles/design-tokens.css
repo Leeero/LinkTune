@@ -1,0 +1,431 @@
+/**
+ * LinkTune Design Tokens
+ * 
+ * 设计理念：Spotify 深色沉浸 + Apple Music 毛玻璃质感 + 网易云亲和力
+ * 
+ * 命名规范：
+ *   --lt-{category}-{property}-{variant}
+ *   例如：--lt-color-primary, --lt-space-md, --lt-radius-lg
+ */
+
+/* ====== 基础色板 ====== */
+:root {
+  /* 品牌色 */
+  --lt-brand-primary: #4f6eff;
+  --lt-brand-primary-hover: #6a85ff;
+  --lt-brand-primary-active: #3a56e0;
+  --lt-brand-accent: #a78bfa;
+  --lt-brand-accent-hover: #c4b5fd;
+  --lt-brand-gradient: linear-gradient(135deg, #4f6eff 0%, #a78bfa 100%);
+  --lt-brand-gradient-vibrant: linear-gradient(135deg, #4f6eff 0%, #a78bfa 50%, #f472b6 100%);
+
+  /* 功能色 */
+  --lt-color-success: #10b981;
+  --lt-color-warning: #f59e0b;
+  --lt-color-error: #ef4444;
+  --lt-color-info: #3b82f6;
+
+  /* 间距 */
+  --lt-space-xxs: 2px;
+  --lt-space-xs: 4px;
+  --lt-space-sm: 8px;
+  --lt-space-md: 12px;
+  --lt-space-lg: 16px;
+  --lt-space-xl: 24px;
+  --lt-space-2xl: 32px;
+  --lt-space-3xl: 48px;
+  --lt-space-4xl: 64px;
+
+  /* 圆角 */
+  --lt-radius-xs: 4px;
+  --lt-radius-sm: 8px;
+  --lt-radius-md: 12px;
+  --lt-radius-lg: 16px;
+  --lt-radius-xl: 20px;
+  --lt-radius-2xl: 24px;
+  --lt-radius-full: 9999px;
+
+  /* 字体 */
+  --lt-font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --lt-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* 字号 */
+  --lt-text-xs: 11px;
+  --lt-text-sm: 13px;
+  --lt-text-base: 15px;
+  --lt-text-lg: 17px;
+  --lt-text-xl: 20px;
+  --lt-text-2xl: 24px;
+  --lt-text-3xl: 30px;
+  --lt-text-4xl: 36px;
+
+  /* 行高 */
+  --lt-leading-tight: 1.25;
+  --lt-leading-normal: 1.5;
+  --lt-leading-relaxed: 1.75;
+
+  /* 字重 */
+  --lt-weight-normal: 400;
+  --lt-weight-medium: 500;
+  --lt-weight-semibold: 600;
+  --lt-weight-bold: 700;
+
+  /* 动画时长 */
+  --lt-duration-fast: 120ms;
+  --lt-duration-normal: 200ms;
+  --lt-duration-slow: 300ms;
+  --lt-duration-slower: 500ms;
+
+  /* 动画缓动 */
+  --lt-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --lt-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --lt-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --lt-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lt-ease-smooth: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* 布局尺寸 */
+  --lt-sidebar-width: 260px;
+  --lt-sidebar-collapsed: 72px;
+  --lt-topbar-height: 48px;
+  --lt-playerbar-height: 88px;
+  --lt-bottomnav-height: 56px;
+  --lt-mini-player-height: 64px;
+
+  /* Z-Index 层级 */
+  --lt-z-dropdown: 100;
+  --lt-z-sidebar: 200;
+  --lt-z-playerbar: 300;
+  --lt-z-mini-player: 400;
+  --lt-z-bottomnav: 500;
+  --lt-z-modal: 1000;
+  --lt-z-full-player: 1500;
+  --lt-z-toast: 2000;
+}
+
+/* ====== 浅色模式 ====== */
+:root,
+[data-theme='light'] {
+  /* 背景 */
+  --lt-bg-base: #f8f9fc;
+  --lt-bg-elevated: #ffffff;
+  --lt-bg-sunken: #f0f1f5;
+  --lt-bg-overlay: rgba(255, 255, 255, 0.85);
+  --lt-bg-glass: rgba(255, 255, 255, 0.72);
+  --lt-bg-glass-heavy: rgba(255, 255, 255, 0.88);
+
+  /* 文字 */
+  --lt-text-primary: rgba(0, 0, 0, 0.88);
+  --lt-text-secondary: rgba(0, 0, 0, 0.55);
+  --lt-text-tertiary: rgba(0, 0, 0, 0.35);
+  --lt-text-disabled: rgba(0, 0, 0, 0.2);
+  --lt-text-inverse: #ffffff;
+
+  /* 边框 */
+  --lt-border-default: rgba(0, 0, 0, 0.08);
+  --lt-border-hover: rgba(0, 0, 0, 0.15);
+  --lt-border-focus: var(--lt-brand-primary);
+
+  /* 填充 */
+  --lt-fill-hover: rgba(0, 0, 0, 0.04);
+  --lt-fill-active: rgba(0, 0, 0, 0.08);
+  --lt-fill-selected: rgba(79, 110, 255, 0.08);
+  --lt-fill-selected-hover: rgba(79, 110, 255, 0.12);
+
+  /* 阴影 */
+  --lt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --lt-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --lt-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+  --lt-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
+  --lt-shadow-glow: 0 0 24px rgba(79, 110, 255, 0.15);
+  --lt-shadow-cover: 0 12px 40px rgba(0, 0, 0, 0.15);
+
+  /* 播放器专用 */
+  --lt-player-bg: var(--lt-bg-glass-heavy);
+  --lt-player-progress-bg: rgba(0, 0, 0, 0.1);
+  --lt-player-progress-fill: var(--lt-brand-primary);
+  --lt-player-progress-buffer: rgba(0, 0, 0, 0.06);
+  --lt-player-progress-thumb: var(--lt-brand-accent);
+
+  /* 模糊 */
+  --lt-blur-sm: blur(8px);
+  --lt-blur-md: blur(16px);
+  --lt-blur-lg: blur(24px);
+  --lt-blur-xl: blur(40px);
+}
+
+/* ====== 深色模式 ====== */
+[data-theme='dark'] {
+  /* 背景 */
+  --lt-bg-base: #0d0f14;
+  --lt-bg-elevated: #161a23;
+  --lt-bg-sunken: #0a0c10;
+  --lt-bg-overlay: rgba(22, 26, 35, 0.92);
+  --lt-bg-glass: rgba(22, 26, 35, 0.75);
+  --lt-bg-glass-heavy: rgba(22, 26, 35, 0.92);
+
+  /* 文字 */
+  --lt-text-primary: rgba(255, 255, 255, 0.92);
+  --lt-text-secondary: rgba(255, 255, 255, 0.6);
+  --lt-text-tertiary: rgba(255, 255, 255, 0.35);
+  --lt-text-disabled: rgba(255, 255, 255, 0.2);
+  --lt-text-inverse: #0d0f14;
+
+  /* 边框 */
+  --lt-border-default: rgba(255, 255, 255, 0.08);
+  --lt-border-hover: rgba(255, 255, 255, 0.15);
+  --lt-border-focus: var(--lt-brand-primary);
+
+  /* 填充 */
+  --lt-fill-hover: rgba(255, 255, 255, 0.05);
+  --lt-fill-active: rgba(255, 255, 255, 0.1);
+  --lt-fill-selected: rgba(79, 110, 255, 0.12);
+  --lt-fill-selected-hover: rgba(79, 110, 255, 0.18);
+
+  /* 阴影 */
+  --lt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.12);
+  --lt-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
+  --lt-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.2);
+  --lt-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.4), 0 8px 16px rgba(0, 0, 0, 0.25);
+  --lt-shadow-glow: 0 0 32px rgba(79, 110, 255, 0.2);
+  --lt-shadow-cover: 0 16px 48px rgba(0, 0, 0, 0.4);
+
+  /* 播放器专用 */
+  --lt-player-bg: var(--lt-bg-glass-heavy);
+  --lt-player-progress-bg: rgba(255, 255, 255, 0.12);
+  --lt-player-progress-fill: var(--lt-brand-primary);
+  --lt-player-progress-buffer: rgba(255, 255, 255, 0.06);
+  --lt-player-progress-thumb: var(--lt-brand-accent);
+}
+
+/* ====== 通用工具类 ====== */
+
+/* 毛玻璃效果 */
+.lt-glass {
+  background: var(--lt-bg-glass);
+  backdrop-filter: var(--lt-blur-lg) saturate(180%);
+  -webkit-backdrop-filter: var(--lt-blur-lg) saturate(180%);
+}
+
+.lt-glass-heavy {
+  background: var(--lt-bg-glass-heavy);
+  backdrop-filter: var(--lt-blur-xl) saturate(200%);
+  -webkit-backdrop-filter: var(--lt-blur-xl) saturate(200%);
+}
+
+/* 渐变文字 */
+.lt-gradient-text {
+  background: var(--lt-brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 可点击元素基础 */
+.lt-clickable {
+  cursor: pointer;
+  transition:
+    transform var(--lt-duration-fast) var(--lt-ease-default),
+    background-color var(--lt-duration-normal) var(--lt-ease-default),
+    box-shadow var(--lt-duration-normal) var(--lt-ease-default);
+}
+
+.lt-clickable:active {
+  transform: scale(0.97);
+}
+
+/* Hover 效果 */
+.lt-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--lt-shadow-lg);
+}
+
+.lt-hover-glow:hover {
+  box-shadow: var(--lt-shadow-glow);
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.lt-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.lt-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 自定义滚动条 */
+.lt-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lt-border-hover) transparent;
+}
+
+.lt-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lt-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lt-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--lt-border-hover);
+  border-radius: var(--lt-radius-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.lt-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--lt-text-tertiary);
+  background-clip: content-box;
+}
+
+/* ====== 动态背景动画 ====== */
+@keyframes lt-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(20px, -15px) scale(1.03);
+  }
+  50% {
+    transform: translate(-10px, 20px) scale(0.97);
+  }
+  75% {
+    transform: translate(15px, 10px) scale(1.02);
+  }
+}
+
+@keyframes lt-pulse-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes lt-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes lt-skeleton {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes lt-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lt-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes lt-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 播放动画条 */
+@keyframes lt-playing-bar {
+  0%,
+  100% {
+    height: 30%;
+  }
+  50% {
+    height: 100%;
+  }
+}
+
+/* 微弹跳 */
+@keyframes lt-bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 列表项交错入场 */
+@keyframes lt-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 脉冲 */
+@keyframes lt-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 闪烁高亮 */
+@keyframes lt-highlight-flash {
+  0% {
+    background-color: rgba(79, 110, 255, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

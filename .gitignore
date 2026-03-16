@@ -47,3 +47,7 @@ secrets/
 *.local
 .cache
 Thumbs.db
+
+# CodeBuddy 本地数据
+.codebuddy/memory/
+.codebuddy/skills/

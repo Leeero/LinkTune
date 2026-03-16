@@ -1,4 +1,4 @@
-import { ConfigProvider } from 'antd';
+import { App, ConfigProvider } from 'antd';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { getLinkTuneTheme, type ThemeMode } from './linkTuneTheme';
@@ -42,7 +42,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider value={value}>
-      <ConfigProvider theme={themeConfig}>{children}</ConfigProvider>
+      <ConfigProvider theme={themeConfig}>
+        <App>{children}</App>
+      </ConfigProvider>
     </ThemeContext.Provider>
   );
 }

@@ -1,43 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
-import { embyGetPlaylists } from '../../protocols/emby/library';
-import type { EmbyPlaylist } from '../../protocols/emby/types';
+import type { EmbyCredentials } from '../../protocols/emby/types';
 import type { AuthCredentials } from '../../session/types';
+import { usePlaylistsStore } from '../../stores/playlistsStore';
 
 export function useEmbyPlaylists(credentials: AuthCredentials | null) {
-  const [playlists, setPlaylists] = useState<EmbyPlaylist[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const playlists = usePlaylistsStore((s) => s.embyPlaylists);
+  const loading = usePlaylistsStore((s) => s.embyLoading);
+  const error = usePlaylistsStore((s) => s.embyError);
+  const initialized = usePlaylistsStore((s) => s.embyInitialized);
+  const fetchEmbyPlaylists = usePlaylistsStore((s) => s.fetchEmbyPlaylists);
+  const resetEmbyPlaylists = usePlaylistsStore((s) => s.resetEmbyPlaylists);
 
   useEffect(() => {
     if (!credentials || credentials.protocol !== 'emby') {
-      setPlaylists([]);
-      setLoading(false);
-      setError(null);
+      resetEmbyPlaylists();
       return;
     }
 
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-
-    embyGetPlaylists({ credentials, signal: controller.signal })
-      .then((list) => {
-        if (controller.signal.aborted) return;
-        setPlaylists(list);
-      })
-      .catch((e) => {
-        if (controller.signal.aborted) return;
-        setPlaylists([]);
-        setError(e instanceof Error ? e.message : '加载歌单失败');
-      })
-      .finally(() => {
-        if (controller.signal.aborted) return;
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [credentials]);
+    // 仅在未初始化时加载（缓存有效则跳过）
+    if (!initialized) {
+      void fetchEmbyPlaylists(credentials as EmbyCredentials, true);
+    }
+  }, [credentials, initialized, fetchEmbyPlaylists, resetEmbyPlaylists]);
 
   return { playlists, loading, error };
 }
