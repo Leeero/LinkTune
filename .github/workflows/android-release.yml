@@ -7,15 +7,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
 
 jobs:
   build-android:
@@ -49,9 +40,6 @@ jobs:
       - name: Build web assets
         run: npm run build
 
-      - name: Add Android platform
-        run: npx cap add android || true
-
       - name: Sync Capacitor
         run: npx cap sync android
 
@@ -68,15 +56,9 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'debug'
+      - name: Build Debug APK (signed)
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
-
-      - name: Build Release APK (unsigned)
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release'
-        working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
 
       - name: Get version from package.json
         id: package-version
@@ -86,25 +68,13 @@ jobs:
         run: |
           mkdir -p release-apk
           if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-debug.apk
-          fi
-          if [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-release-unsigned.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-android.apk
           fi
 
-      - name: Upload Debug APK artifact
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'debug'
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LinkTune-android-debug
-          path: release-apk/*.apk
-          if-no-files-found: error
-
-      - name: Upload Release APK artifact
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: LinkTune-android-release
+          name: LinkTune-android
           path: release-apk/*.apk
           if-no-files-found: error
 
@@ -120,7 +90,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: LinkTune-android-release
+          name: LinkTune-android
           path: artifacts
 
       - name: List artifacts

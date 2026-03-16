@@ -83,9 +83,6 @@ jobs:
       - name: Build web assets
         run: npm run build
 
-      - name: Add Android platform
-        run: npx cap add android || true
-
       - name: Sync Capacitor
         run: npx cap sync android
 
@@ -102,9 +99,35 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Release APK
+      - name: Debug - Check web assets
+        run: |
+          echo "=== dist 目录内容 ==="
+          ls -la dist/
+          echo "=== dist 目录大小 ==="
+          du -sh dist/
+          echo "=== Android assets 目录 ==="
+          ls -la android/app/src/main/assets/ || echo "assets 目录不存在"
+          ls -la android/app/src/main/assets/public/ || echo "public 目录不存在"
+
+      - name: Build Debug APK (signed)
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Debug - Check APK
+        run: |
+          echo "=== APK 文件 ==="
+          find android -name "*.apk" -exec ls -lh {} \;
+          echo "=== APK 内容检查 ==="
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "--- APK 文件列表 (前100行) ---"
+            unzip -l android/app/build/outputs/apk/debug/app-debug.apk | head -100
+            echo "--- 检查 assets/public 是否存在 ---"
+            unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E "assets/public" | head -20
+            echo "--- 检查 AndroidManifest.xml ---"
+            unzip -p android/app/build/outputs/apk/debug/app-debug.apk AndroidManifest.xml | head -50 || echo "无法读取 manifest"
+            echo "--- 验证 APK 签名 ---"
+            $ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk || echo "签名验证失败"
+          fi
 
       - name: Get version from package.json
         id: package-version
@@ -113,8 +136,13 @@ jobs:
       - name: Rename APK files
         run: |
           mkdir -p release-apk
-          if [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-android.apk
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/LinkTune-${{ steps.package-version.outputs.version }}-android.apk
+            echo "APK 大小:"
+            ls -lh release-apk/
+          else
+            echo "错误: APK 文件不存在!"
+            exit 1
           fi
 
       - name: Upload Android artifact
@@ -122,7 +150,7 @@ jobs:
         with:
           name: release-android
           path: release-apk/*.apk
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   # 发布 Release
   release:

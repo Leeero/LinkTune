@@ -8,7 +8,14 @@ release
 
 # Capacitor platforms
 ios
-android
+
+# Android 构建产物（保留源码目录）
+android/.gradle
+android/app/build
+android/build
+android/capacitor-cordova-android-plugins/build
+android/capacitor-android/build
+android/local.properties
 
 # logs
 npm-debug.log*

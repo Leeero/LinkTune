@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LinkTune</string>
+    <string name="title_activity_main">LinkTune</string>
+    <string name="package_name">com.linktune.app</string>
+    <string name="custom_url_scheme">com.linktune.app</string>
+</resources>
